@@ -309,7 +309,7 @@ SLASHER.InitHud = function(_, hud)
 	hud:TieControlVisible("LMB", "CanKill")
 	hud:TieControlVisible("RMB", "CanChase")
 	hud:AddControl("F", "leap", Material("slashco/ui/icons/slasher/s_punch"))
-	hud:TieControlVisible("F", "InSlasherChaseMode", true, true, true)
+	hud:TieControlVisible("F", "InSlasherChaseMode", false, true, true)
 
 	hud.prevTarget = not LocalPlayer():GetNWString("ManspiderTarget")
 	hud.prevNested = not LocalPlayer():GetNWBool("ManspiderNested")
