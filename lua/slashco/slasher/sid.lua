@@ -99,7 +99,7 @@ SLASHER.OnTickBehaviour = function(slasher)
 
 	if slasher:GetNWBool("SidGunRage") and not slasher:GetNWBool("SidGunLetterC") and slasher:GetNWBool("SidGunEquipped") then
 		slasher:SetNWBool("SidGunLetterC", true)
-		SlashCo.PlayGlobalSound("slashco/slasher/sid_THE_LETTER_C.wav", 95, slasher, 0.5)
+		slasher:PlayGlobalSound("slashco/slasher/sid_THE_LETTER_C.wav", 95, 0.5)
 	end
 
 	if slasher:GetNWInt("SidGunUses") ~= v1 then
@@ -143,9 +143,9 @@ SLASHER.OnPrimaryFire = function(slasher, target)
 
 			slasher:SetNWBool("SidGunShoot", true)
 
-			SlashCo.PlayGlobalSound("slashco/slasher/sid_shot_farthest.mp3", 150, slasher)
-			SlashCo.PlayGlobalSound("slashco/slasher/sid_shot.mp3", 85, slasher)
-			SlashCo.PlayGlobalSound("slashco/slasher/sid_shot_legacy.mp3", 78, slasher)
+			slasher:PlayGlobalSound("slashco/slasher/sid_shot_farthest.mp3", 150)
+			slasher:PlayGlobalSound("slashco/slasher/sid_shot.mp3", 85)
+			slasher:PlayGlobalSound("slashco/slasher/sid_shot_legacy.mp3", 70)
 
 			slasher:FireBullets(
 					{
@@ -212,7 +212,7 @@ SLASHER.OnPrimaryFire = function(slasher, target)
 				target:SetNWBool("SurvivorBeingJumpscared", true)
 				slasher:SetNWBool("CanChase", false)
 
-				SlashCo.PlayGlobalSound("slashco/slasher/sid_angry_" .. math.random(1, 4) .. ".mp3", 85, slasher, 1)
+				slasher:PlayGlobalSound("slashco/slasher/sid_angry_" .. math.random(1, 4) .. ".mp3", 85)
 
 				slasher:SetNWBool("SidExecuting", true)
 
@@ -255,7 +255,7 @@ SLASHER.OnPrimaryFire = function(slasher, target)
 
 					target:SetNWBool("SurvivorBeingJumpscared", false)
 
-					SlashCo.PlayGlobalSound("slashco/slasher/sid_shot_farthest.mp3", 150, slasher)
+					slasher:PlayGlobalSound("slashco/slasher/sid_shot_farthest.mp3", 150)
 
 					slasher:EmitSound("slashco/slasher/sid_shot.mp3", 95)
 					slasher:EmitSound("slashco/slasher/sid_shot_2.mp3", 85)
@@ -284,7 +284,11 @@ SLASHER.OnPrimaryFire = function(slasher, target)
 							return
 						end
 
-						target:Kill()
+						if IsValid(slasher) then
+							target:TakeDamage(99999, slasher, slasher)
+						else
+							target:Kill()
+						end
 					end)
 				end)
 
@@ -563,13 +567,13 @@ SLASHER.InitHud = function(_, hud)
 	hud:SetTitle("Sid")
 
 	hud:AddControl("R", "eat cookie", cookieTable)
-	hud:TieControlVisible("R", "SidGun", true, false, false)
+	hud:TieControlVisible("R", "SidGun", true, false)
 	hud:ChaseAndKill()
 	hud:SetControlIconTable("LMB", attackTable)
 	hud:SetControlIconTable("RMB", aimTable)
 	hud:AddControl("F", "equip gun", gunTable)
-	hud:TieControlVisible("F", "SidGunAimed", true, false, false)
-	hud:TieControlText("F", "SidGun", "unequip gun", "equip gun", false, false)
+	hud:TieControlVisible("F", "SidGunAimed", true, false)
+	hud:TieControlText("F", "SidGun", "unequip gun", "equip gun", false)
 	hud:SetCrosshairEnabled(true)
 	hud:SetCrosshairAlpha(255)
 	hud:TieCrosshair("SidGunAimed")
@@ -595,13 +599,13 @@ SLASHER.InitHud = function(_, hud)
 			if gun then
 				hud:UntieControl("LMB")
 				hud:UntieControl("RMB")
-				hud:TieControlText("RMB", "SidGunAimed", "lower gun", "aim", true, false)
+				hud:TieControlText("RMB", "SidGunAimed", "lower gun", "aim", true)
 				hud:ShakeControl("F")
 				hud:SetControlEnabled("F", false)
 				timer.Simple(0, function()
 					hud:SetControlEnabled("LMB", true)
 					hud:SetControlEnabled("RMB", false)
-					hud:TieControlText("LMB", "SidGunAimed", "shoot", "kill survivor", false, false)
+					hud:TieControlText("LMB", "SidGunAimed", "shoot", "kill survivor", false)
 				end)
 			else
 				if gunUses <= 0 then
@@ -617,7 +621,7 @@ SLASHER.InitHud = function(_, hud)
 				hud:ShakeControl("F")
 				hud:TieControl("LMB", "CanKill")
 				hud:TieControl("RMB", "CanChase")
-				hud:TieControlText("RMB", "InSlasherChaseMode", "stop chasing", "start chasing", true, false)
+				hud:TieControlText("RMB", "InSlasherChaseMode", "stop chasing", "start chasing", true)
 			end
 
 			hud.prevGun = gun
@@ -688,7 +692,7 @@ SLASHER.SidRage = function(ply)
 
 		slasher.SlasherValue1 = slasher.SlasherValue1 + 2
 
-		SlashCo.PlayGlobalSound("slashco/slasher/sid_angry_" .. math.random(1, 4) .. ".mp3", 95, slasher, 1)
+		slasher:PlayGlobalSound("slashco/slasher/sid_angry_" .. math.random(1, 4) .. ".mp3", 95)
 
 		for _, v in player.Iterator() do
 			v:SetNWBool("SidFuck", true)
@@ -699,7 +703,7 @@ SLASHER.SidRage = function(ply)
 				v:SetNWBool("SidFuck", false)
 			end
 
-			SlashCo.PlayGlobalSound("slashco/slasher/sid_sad_1.mp3", 85, slasher, 1)
+			slasher:PlayGlobalSound("slashco/slasher/sid_sad_1.mp3", 85)
 		end)
 	end
 end
@@ -748,8 +752,6 @@ if CLIENT then
 			angles = ply:LocalToWorldAngles(Angle(0, -135, 0))
 
 			return GAMEMODE:CalcView(ply, pos, angles, fov)
-		else
-			return
 		end
 	end)
 end

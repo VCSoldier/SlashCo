@@ -153,9 +153,9 @@ SLASHER.OnTickBehaviour = function(slasher)
 		end
 
 		if slasher.soundon > 0 then
-			SlashCo.PlayGlobalSound("slashco/slasher/leuonard_yell7.mp3", 98, slasher, 1)
-			SlashCo.PlayGlobalSound("slashco/slasher/leuonard_full_close.wav", 80, slasher, 1)
-			SlashCo.PlayGlobalSound("slashco/slasher/leuonard_full_far.wav", 125, slasher, 1)
+			slasher:PlayGlobalSound("slashco/slasher/leuonard_yell7.mp3", 100)
+			slasher:PlayGlobalSound("slashco/slasher/leuonard_full_close.wav", 80)
+			slasher:PlayGlobalSound("slashco/slasher/leuonard_full_far.wav", 125)
 			slasher.soundon = 0
 		end
 
@@ -203,7 +203,11 @@ SLASHER.OnTickBehaviour = function(slasher)
 							return
 						end
 
-						ent:Kill()
+						if IsValid(slasher) then
+							ent:TakeDamage(99999, slasher, slasher)
+						else
+							ent:Kill()
+						end
 					end)
 
 					timer.Simple(0.25, function()
@@ -282,8 +286,8 @@ SLASHER.InitHud = function(_, hud)
 	hud:SetTitle("Leuonard")
 
 	hud:ChaseAndKill()
-	hud:TieControlVisible("LMB", "LeuonardFullRoid", true, false, false)
-	hud:TieControlVisible("RMB", "LeuonardFullRoid", true, false, false)
+	hud:TieControlVisible("LMB", "LeuonardFullRoid", true, false)
+	hud:TieControlVisible("RMB", "LeuonardFullRoid", true, false)
 
 	hud:AddMeter("r**e")
 	hud:TieMeterInt("r**e", "LeuonardRoid")

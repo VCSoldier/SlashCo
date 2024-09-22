@@ -1,5 +1,17 @@
 SlashCo = SlashCo or {}
 
+function SlashCo.SinglePlayerSetup()
+	g_SlashCoDebug = true
+	SlashCo.CurRound.Difficulty = math.random(0, 3)
+	SlashCo.CurRound.SurvivorData.GasCanMod = 0
+	SlashCo.CurRound.OfferingData.CurrentOffering = 0
+
+	hook.Add("PlayerInitialSpawn", "SinglePlayerSetup", function(ply)
+		table.insert(SlashCo.CurRound.ExpectedPlayers, { steamid = ply:SteamID64() })
+		table.insert(SlashCo.CurRound.SlasherData.AllSurvivors, { id = ply:SteamID64(), GameContribution = 0 })
+	end)
+end
+
 SlashCo.LoadCurRoundData = function()
 	table.Empty(SlashCo.CurRound.ExpectedPlayers)
 	if sql.TableExists("slashco_table_basedata") and sql.TableExists("slashco_table_survivordata") and sql.TableExists("slashco_table_slasherdata") then
@@ -103,6 +115,11 @@ SlashCo.LoadCurRoundData = function()
 			end)
 		end
 	else
+		if game.SinglePlayer() then
+			SlashCo.SinglePlayerSetup()
+			return
+		end
+
 		print("[SlashCo] Something went wrong while trying to load the round data from the Database! Restart imminent. (init)")
 		local baseTable = sql.TableExists("slashco_table_basedata") and "present" or "nil"
 		local survivorTable = sql.TableExists("slashco_table_survivordata") and "present" or "nil"
@@ -117,7 +134,7 @@ end
 
 SlashCo.AwaitExpectedPlayers = function()
 	if game.GetMap() ~= "sc_lobby" then
-		if #SlashCo.CurRound.ExpectedPlayers < 2 then
+		if not game.SinglePlayer() and #SlashCo.CurRound.ExpectedPlayers < 2 then
 			return
 		end --don't start with no data
 
@@ -157,12 +174,14 @@ end
 
 --				***Begin the round start timer***
 SlashCo.RoundBeginTimer = function()
-	timer.Create("GameStart", 15, 1, function()
+	local time = game.SinglePlayer() and 3 or 15
+	timer.Create("GameStart", time, 1, function()
 		RunConsoleCommand("slashco_run_curconfig")
 	end)
 end
 
 local roundEnding
+local delay = 20
 SlashCo.EndRound = function()
 	if g_SlashCoDebug then
 		return
@@ -173,31 +192,28 @@ SlashCo.EndRound = function()
 	end
 	roundEnding = true
 
-	local delay = 20
-
 	local SurvivorCount = team.NumPlayers(TEAM_SURVIVOR)
+	local heliCount = #SlashCo.CurRound.HelicopterRescuedPlayers
 	if SurvivorCount == 0 then
-		--All Survivors are Dead
-
-		survivorsWon = false
+		--All survivors are dead
 
 		if not SlashCo.CurRound.EscapeHelicopterSummoned or SlashCo.CurRound.DistressBeaconUsed then
-			--Assignment Failed
+			--Assignment failed
 
 			SlashCo.RoundOverScreen(3)
 		else
-			--Assignment Success
+			--Assignment success
 
 			SlashCo.RoundOverScreen(2)
 		end
 	else
-		--There are living Survivors
+		--There are living survivors
 
 		if SlashCo.CurRound.DistressBeaconUsed then
-			--Premature Win Distress Beacon
+			--Premature Win distress beacon
 
-			if #SlashCo.CurRound.HelicopterRescuedPlayers > 0 then
-				--The Last survivor got to the helicopter
+			if heliCount > 0 then
+				--The last survivor got to the helicopter
 
 				SlashCo.RoundOverScreen(4)
 			else
@@ -206,44 +222,39 @@ SlashCo.EndRound = function()
 				SlashCo.RoundOverScreen(3)
 			end
 		else
-			--Normal Win
+			--Normal win
 
-			if #SlashCo.CurRound.SlasherData.AllSurvivors >= SurvivorCount and SurvivorCount <= #SlashCo.CurRound.HelicopterRescuedPlayers then
+			if heliCount >= #SlashCo.CurRound.SlasherData.AllSurvivors then
 				--Everyone lived
 
 				SlashCo.RoundOverScreen(0)
 			else
-				--Not Everyone lived
+				--Not everyone lived
 
 				SlashCo.RoundOverScreen(1)
 			end
 		end
 	end
 
-	if #SlashCo.CurRound.HelicopterRescuedPlayers > 0 then
+	if heliCount > 0 then
 		local winners = {}
 
-		--Add to stats of the remaining survivors' wins.
+		--Add to stats of the remaining survivors' wins
 		for _, v in ipairs(SlashCo.CurRound.HelicopterRescuedPlayers) do
-			if not IsValid(v) then
-				return
-			end
+			if not IsValid(v) then continue end
 
-			local plyID = v:SteamID64()
+			SlashCoDatabase.UpdateStats(v:SteamID64(), "SurvivorRoundsWon", 1)
 
-			SlashCoDatabase.UpdateStats(plyID, "SurvivorRoundsWon", 1)
 			v:SetPoints("survive")
-			winners[v] = true
+			winners[v:UserID()] = true
 		end
 
-		if #SlashCo.CurRound.SlasherData.AllSurvivors > 1 and table.Count(winners) == 1 then
-			for k, _ in pairs(winners) do
-				k:SetPoints("last_survive")
-			end
+		if heliCount == 1 and #SlashCo.CurRound.SlasherData.AllSurvivors > 1 then
+			SlashCo.CurRound.HelicopterRescuedPlayers[1]:SetPoints("last_survive")
 		end
 
 		for _, v in ipairs(team.GetPlayers(TEAM_SURVIVOR)) do
-			if not winners[v] then
+			if not winners[v:UserID()] then
 				v:SetPoints("left_behind")
 			end
 		end
@@ -256,15 +267,7 @@ SlashCo.EndRound = function()
 		SlashCo.CommitPoints()
 
 		local survivors = team.GetPlayers(TEAM_SURVIVOR)
-		for i = 1, #survivors do
-			survivors[i]:SetTeam(TEAM_SPECTATOR)
-			survivors[i]:Spawn()
-		end
 		local slashers = team.GetPlayers(TEAM_SLASHER)
-		for i = 1, #slashers do
-			slashers[i]:SetTeam(TEAM_SPECTATOR)
-			slashers[i]:Spawn()
-		end
 
 		if #survivors < 1 then
 			--Add to stats of the slasher's wins
@@ -279,14 +282,12 @@ SlashCo.EndRound = function()
 		timer.Simple(0.5, function()
 			SlashCo.GoToLobby()
 		end)
-		--print("tried to go to lobby (round end)")
 	end)
 end
 
+local delay1 = 16
 SlashCo.SurvivorWinFinish = function()
-	local delay = 16
-
-	timer.Simple(delay, function()
+	timer.Simple(delay1, function()
 		SlashCo.EndRound()
 	end)
 end

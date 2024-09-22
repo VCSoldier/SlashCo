@@ -58,6 +58,10 @@ function sign(number)
 end
 
 if SERVER then
+	function ENT:UpdateTransmitState()
+		return TRANSMIT_ALWAYS
+	end
+
 	function ENT:Use(activator)
 		local availabilityHeli = false
 		local userEnteredAlready
@@ -80,9 +84,9 @@ if SERVER then
 			activator:SetNWBool("DynamicFlashlight", false)
 		end
 
-		for _, v in ipairs(SatPlayers) do
-			--local id = activator:SteamID64()
+		activator.CantBuy = true
 
+		for _, v in ipairs(SatPlayers) do
 			if v == activator then
 				--If the steamid in this entry matches the one we're looking for, that means the player is already in the copter.
 				userEnteredAlready = true
@@ -303,13 +307,7 @@ if SERVER then
 
 		return true -- Apply NextThink call
 	end
-end
-
-function ENT:UpdateTransmitState()
-	return TRANSMIT_ALWAYS
-end
-
-if CLIENT then
+else
 	function ENT:Draw()
 		self:DrawModel()
 	end

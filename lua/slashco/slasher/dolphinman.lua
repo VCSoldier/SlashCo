@@ -25,6 +25,11 @@ SLASHER.ProTip = "Dolphinman_tip"
 SLASHER.SpeedRating = "★★☆☆☆"
 SLASHER.EyeRating = "★★★☆☆"
 SLASHER.DiffRating = "★★★★☆"
+SLASHER.CannotBeSpectated = true
+
+SLASHER.OnSpawn = function(slasher)
+	slasher.Jump = slasher:GetJumpPower()
+end
 
 SLASHER.OnTickBehaviour = function(slasher)
 	local v1 = slasher.SlasherValue1 --Hunt power
@@ -34,6 +39,7 @@ SLASHER.OnTickBehaviour = function(slasher)
 	local SO = SlashCo.CurRound.OfferingData.SO
 
 	if slasher:GetNWBool("DolphinInHiding") then
+		slasher:SetJumpPower(0)
 		slasher:SetRunSpeed(1)
 		slasher:SetWalkSpeed(1)
 		slasher:SetSlowWalkSpeed(1)
@@ -48,8 +54,8 @@ SLASHER.OnTickBehaviour = function(slasher)
 		if SlashCo.CurRound.EscapeHelicopterSummoned then
 			slasher:SetNWBool("DolphinFound", true)
 
-			SlashCo.PlayGlobalSound("slashco/slasher/dolfin_call.wav", 85, slasher)
-			SlashCo.PlayGlobalSound("slashco/slasher/dolfin_call_far.wav", 145, slasher)
+			slasher:PlayGlobalSound("slashco/slasher/dolfin_call.wav", 85)
+			slasher:PlayGlobalSound("slashco/slasher/dolfin_call_far.wav", 140)
 
 			timer.Simple(10, function()
 				slasher:SetNWBool("DolphinFound", false)
@@ -58,31 +64,35 @@ SLASHER.OnTickBehaviour = function(slasher)
 			end)
 		end
 
-		for i = 1, team.NumPlayers(TEAM_SURVIVOR) do
-			local s = team.GetPlayers(TEAM_SURVIVOR)[i]
-
-			if s:GetPos():Distance(slasher:GetPos()) < 500 then
-				local tr = util.TraceLine({
-					start = slasher:EyePos(),
-					endpos = s:GetPos() + Vector(0, 0, 40),
-					filter = slasher,
-					mask = MASK_VISIBLE
-				})
-
-				if tr.Entity == s then
-					slasher:SetNWBool("DolphinFound", true)
-
-					SlashCo.PlayGlobalSound("slashco/slasher/dolfin_call.wav", 85, slasher)
-					SlashCo.PlayGlobalSound("slashco/slasher/dolfin_call_far.wav", 145, slasher)
-
-					timer.Simple(10, function()
-						slasher:SetNWBool("DolphinFound", false)
-						slasher:SetNWBool("DolphinInHiding", false)
-
-						slasher:SetNWBool("DolphinHunting", true)
-					end)
-				end
+		for _, s in ipairs(team.GetPlayers(TEAM_SURVIVOR)) do
+			if not s:CanBeSeen() then
+				continue
 			end
+
+			if s:GetPos():Distance(slasher:GetPos()) >= 500 then
+				continue
+			end
+
+			local tr = util.TraceLine({
+				start = slasher:EyePos(),
+				endpos = s:WorldSpaceCenter(),
+				filter = slasher
+			})
+
+			if tr.Entity ~= s then
+				continue
+			end
+
+			slasher:SetNWBool("DolphinFound", true)
+
+			slasher:PlayGlobalSound("slashco/slasher/dolfin_call.wav", 85)
+			slasher:PlayGlobalSound("slashco/slasher/dolfin_call_far.wav", 140)
+
+			timer.Simple(10, function()
+				slasher:SetNWBool("DolphinFound", false)
+				slasher:SetNWBool("DolphinInHiding", false)
+				slasher:SetNWBool("DolphinHunting", true)
+			end)
 		end
 
 		if slasher:GetNWBool("CanKill") then
@@ -92,6 +102,8 @@ SLASHER.OnTickBehaviour = function(slasher)
 		if not slasher:GetNWBool("CanKill") then
 			slasher:SetNWBool("CanKill", true)
 		end
+
+		slasher:SetJumpPower(slasher.Jump)
 
 		--urgh i can move yes lmao
 
@@ -138,6 +150,20 @@ SLASHER.OnTickBehaviour = function(slasher)
 
 	slasher:SetNWFloat("Slasher_Eyesight", SLASHER.Eyesight + (hunt_boost * 5))
 	slasher:SetNWInt("Slasher_Perception", SLASHER.Perception + (hunt_boost * 3))
+end
+
+SLASHER.Thirdperson = function(ply)
+	return ply:GetNWBool("DolphinInHiding")
+end
+
+SLASHER.CanBeSeen = function(ply)
+	if SERVER then
+		return
+	end
+
+	if ply:GetNWBool("SlashCoVisible", true) and not ply:GetNWBool("DolphinInHiding") then
+		return true
+	end
 end
 
 SLASHER.OnPrimaryFire = function(slasher, target)
@@ -222,9 +248,9 @@ SLASHER.InitHud = function(_, hud)
 
 	hud:AddControl("R", "hide", hideIcons)
 	hud:ChaseAndKill(true)
-	hud:TieControlVisible("LMB", "DolphinInHiding", true, true, false)
-	hud:TieControlVisible("R", "DolphinHunting", true, true, false)
-	hud:TieControlText("R", "DolphinInHiding", "unhide", "hide", true, false)
+	hud:TieControlVisible("LMB", "DolphinInHiding", true, true)
+	hud:TieControlVisible("R", "DolphinHunting", true, true)
+	hud:TieControlText("R", "DolphinInHiding", "unhide", "hide", true)
 
 	hud:AddMeter("hunt")
 	hud:TieMeterInt("hunt", "DolphinHunt")
@@ -271,7 +297,7 @@ if CLIENT then
 
 			if v:GetNWBool("DolphinHunting") then
 				local tlight = DynamicLight(v:EntIndex() + 915)
-				if (tlight) then
+				if tlight then
 					tlight.pos = v:LocalToWorld(Vector(0, 0, 20))
 					tlight.r = 249
 					tlight.g = 215

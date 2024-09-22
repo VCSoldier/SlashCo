@@ -20,22 +20,23 @@ local function ArmBeacon(ent)
 	if ent:GetNWBool("BeaconBroken") then return end
 
 	timer.Remove(ent:EntIndex() .. "_BeaconBlipSound")
-	SlashCo.PlayGlobalSound("slashco/survivor/distress_siren.wav", 98, ent)
+	ent:PlayGlobalSound("slashco/survivor/distress_siren.wav", 100)
 	ent:SetNWBool("ArmingBeacon", false)
+	SlashCo.BeaconArming = nil
 	SlashCo.SummonEscapeHelicopter(true)
 	SlashCo.CurRound.DistressBeaconUsed = true
 end
 
-function ENT:UpdateTransmitState()
-	return TRANSMIT_ALWAYS
-end
-
 if SERVER then
+	function ENT:UpdateTransmitState()
+		return TRANSMIT_ALWAYS
+	end
+
 	function ENT:Initialize()
 		self:SetModel(SlashCoItems.Beacon.Model)
 		self:SetSolid(SOLID_VPHYSICS)
 		self:SetCollisionGroup(COLLISION_GROUP_PASSABLE_DOOR) --Collide with everything but the player
-		self:SetAngles(Angle(180,0,0))
+		self:SetAngles(Angle(180, 0, 0))
 	end
 
 	function ENT:Think()
@@ -48,8 +49,12 @@ if SERVER then
 
 			print("[SlashCo] Beacon set to arm in " .. fin_time .. " seconds.")
 
-			timer.Create(self:EntIndex() .. "_BeaconArming",fin_time, 1, function() ArmBeacon(self) end)
-			timer.Create(self:EntIndex() .. "_BeaconBlipSound",3 , 0, function() SlashCo.PlayGlobalSound("slashco/beacon_connect.mp3", 95, self) end)
+			timer.Create(self:EntIndex() .. "_BeaconArming",fin_time, 1, function()
+				ArmBeacon(self)
+			end)
+			timer.Create(self:EntIndex() .. "_BeaconBlipSound",3 , 0, function()
+				self:PlayGlobalSound("slashco/beacon_connect.mp3", 100)
+			end)
 			self.TimersStarted = true
 		end
 
@@ -69,6 +74,7 @@ if SERVER then
 				self:SetModel("models/props_c17/light_cagelight02_off.mdl")
 
 				self:SetNWBool("ArmingBeacon", false)
+				SlashCo.BeaconArming = nil
 				self:PhysicsInit(SOLID_VPHYSICS)
 				self:SetMoveType(MOVETYPE_VPHYSICS)
 
@@ -82,12 +88,9 @@ if SERVER then
 			end
 		end
 	end
-end
-
-if CLIENT then
+else
 	function ENT:Draw()
 		self:DrawModel()
-
 	end
 
 	function ENT:Think()

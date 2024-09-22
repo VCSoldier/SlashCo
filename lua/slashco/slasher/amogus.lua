@@ -106,7 +106,11 @@ SLASHER.OnPrimaryFire = function(slasher, target)
 		if IsValid(target) then
 			target:SetNWBool("SurvivorBeingJumpscared", false)
 			target:Freeze(false)
-			target:Kill()
+			if IsValid(slasher) then
+				target:TakeDamage(99999, slasher, slasher)
+			else
+				target:Kill()
+			end
 		end
 
 		if IsValid(slasher) then
@@ -166,9 +170,6 @@ SLASHER.OnMainAbilityFire = function(slasher)
 		util.PrecacheModel("models/slashco/slashers/amogus/amogus.mdl")
 		slasher:SetModel("models/slashco/slashers/amogus/amogus.mdl")
 
-		slasher:SetColor(Color(255, 255, 255, 255))
-		slasher:DrawShadow(true)
-		slasher:SetRenderMode(RENDERMODE_TRANSCOLOR)
 		slasher:SetVisible(true)
 
 		slasher:SetRunSpeed(SlashCoSlashers[slasher:GetNWString("Slasher")].ProwlSpeed)
@@ -188,13 +189,9 @@ SLASHER.OnMainAbilityFire = function(slasher)
 end
 
 SLASHER.OnSpecialAbilityFire = function(slasher)
-	local SO = SlashCo.CurRound.OfferingData.SO
-
 	if not slasher:GetNWBool("AmogusDisguising") and slasher.SlasherValue2 < 0.01 and not slasher:GetNWBool("AmogusFuelDisguise") and not slasher:GetNWBool("AmogusDisguised") then
-
 		slasher:SetNWBool("AmogusDisguising", true)
 		slasher:Freeze(true)
-
 		slasher:EmitSound("slashco/slasher/amogus_transform" .. math.random(1, 2) .. ".mp3")
 
 		slasher.SlasherValue2 = 4
@@ -325,7 +322,7 @@ SLASHER.InitHud = function(_, hud)
 	hud:TieControlText("R", "AmogusDisguised", "reveal yourself", "disguise as survivor", true)
 
 	local control = hud:GetControl("LMB")
-	control.prevSurvivor = LocalPlayer():GetNWBool("AmogusSurvivorDisguise")
+	control.prevSurvivor = -1
 	function control.AlsoThink()
 		local survivor = LocalPlayer():GetNWBool("AmogusSurvivorDisguise")
 		if survivor ~= control.prevSurvivor then

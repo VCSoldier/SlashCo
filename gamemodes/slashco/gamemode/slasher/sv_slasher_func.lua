@@ -208,7 +208,12 @@ SlashCo.Jumpscare = function(slasher, target)
 			target:SetNWBool("SurvivorJumpscare_" .. slasher:GetNWString("Slasher"), false)
 			target:EmitSound("slashco/survivor/effectexpire_breath.mp3")
 			target:Freeze(false)
-			target:Kill()
+
+			if IsValid(slasher) then
+				target:TakeDamage(99999, slasher, slasher)
+			else
+				target:Kill()
+			end
 		end
 
 		if IsValid(slasher) then
@@ -316,7 +321,7 @@ SlashCo.StartChaseMode = function(slasher)
 	slasher.ChaseActivationCooldown = slasher:SlasherValue("ChaseCooldown", 3)
 	slasher:SetRunSpeed(slasher:SlasherValue("ChaseSpeed"))
 	slasher:SetWalkSpeed(slasher:SlasherValue("ChaseSpeed"))
-	SlashCo.PlayGlobalSound(slasher:SlasherValue("ChaseMusic"), 95, slasher)
+	slasher:PlayGlobalSound(slasher:SlasherValue("ChaseMusic"), 95)
 end
 
 SlashCo.BustDoor = function(slasher, target, force)

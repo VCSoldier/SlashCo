@@ -109,12 +109,11 @@ SlashCo.ResetCurRoundData()
 SlashCo.PlayerData = SlashCo.PlayerData or {} --Holds all loaded playerdata
 
 --Spawn a gas can
--- [[
 SlashCo.CreateGasCan = function(pos, ang)
 	local Ent = ents.Create("sc_gascan")
 
 	if not IsValid(Ent) then
-		MsgC(Color(255, 50, 50),
+		MsgC(Color(255, 64, 64),
 				"[SlashCo] Something went wrong when trying to create a gas can at (" .. tostring(pos) .. "), entity was NULL.\n")
 		return nil
 	end
@@ -130,14 +129,13 @@ SlashCo.CreateGasCan = function(pos, ang)
 
 	return Ent
 end
---]]
 
 --Spawn an Item( or any entity, including slasher entities )
 SlashCo.CreateItem = function(class, pos, ang)
 	local Ent = ents.Create(class)
 
 	if not IsValid(Ent) then
-		MsgC(Color(255, 50, 50),
+		MsgC(Color(255, 64, 64),
 				"[SlashCo] Something went wrong when trying to create a " .. class .. " at (" .. tostring(pos) .. "), entity was NULL.\n")
 		return nil
 	end
@@ -147,27 +145,15 @@ SlashCo.CreateItem = function(class, pos, ang)
 	Ent:Spawn()
 	Ent:Activate()
 
-	local id = Ent:EntIndex()
-
-	if class == "sc_babaclone" then
-		if SERVER then
-			SlashCo.CurRound.SlasherEntities[id] = {
-				activateWalk = false,
-				activateSpook = false,
-				PostActivation = false
-			}
-		end
-	end
-
-	return id
+	return Ent
 end
 
---Spawn the helicopter 
+--Spawn the helicopter
 SlashCo.CreateHelicopter = function(pos, ang)
 	local Ent = ents.Create("sc_helicopter")
 
 	if not IsValid(Ent) then
-		MsgC(Color(255, 50, 50),
+		MsgC(Color(255, 64, 64),
 				"[SlashCo] Something went wrong when trying to create the helicopter at (" .. tostring(pos) .. "), entity was NULL.\n")
 		return nil
 	end
@@ -185,7 +171,7 @@ SlashCo.CreateItemStash = function(pos, ang)
 	local Ent = ents.Create("sc_itemstash")
 
 	if not IsValid(Ent) then
-		MsgC(Color(255, 50, 50),
+		MsgC(Color(255, 64, 64),
 				"[SlashCo] Something went wrong when trying to create the itemstash at (" .. tostring(pos) .. "), entity was NULL.\n")
 		return nil
 	end
@@ -204,7 +190,7 @@ SlashCo.CreateOfferTable = function(pos, ang)
 	local Ent = ents.Create("sc_offertable")
 
 	if not IsValid(Ent) then
-		MsgC(Color(255, 50, 50),
+		MsgC(Color(255, 64, 64),
 				"[SlashCo] Something went wrong when trying to create the offertable at (" .. tostring(pos) .. "), entity was NULL.\n")
 		return nil
 	end
@@ -223,7 +209,7 @@ SlashCo.CreateRadio = function(pos, ang)
 	local Ent = ents.Create("radio")
 
 	if not IsValid(Ent) then
-		MsgC(Color(255, 50, 50),
+		MsgC(Color(255, 64, 64),
 				"[SlashCo] Something went wrong when trying to create the offertable at (" .. tostring(pos) .. "), entity was NULL.\n")
 		return nil
 	end
@@ -241,13 +227,9 @@ SlashCo.RemoveAllCurRoundEnts = function()
 	local gens = ents.FindByClass("sc_generator")
 	for _, v in ipairs(gens) do
 		local can = v.FuelingCan --make sure any attached cans and bats go too
-		--local bat = v.HasBattery --this returns a boolean
 		if IsValid(can) then
 			can:Remove()
 		end
-		--if IsValid(bat) then
-		--	bat:Remove()
-		--end
 		v:Remove()
 	end
 
@@ -268,7 +250,7 @@ SlashCo.RemoveAllCurRoundEnts = function()
 		v:Remove()
 	end
 
-	for I = 1, #(SlashCo.CurRound.ExposureSpawns) do
+	for I = 1, #SlashCo.CurRound.ExposureSpawns do
 		if IsValid(Entity(SlashCo.CurRound.ExposureSpawns[I])) then
 			Entity(SlashCo.CurRound.ExposureSpawns[I]):Remove()
 		end
@@ -276,9 +258,7 @@ SlashCo.RemoveAllCurRoundEnts = function()
 end
 
 SlashCo.ChangeMap = function(mapname)
-	if SERVER then
-		RunConsoleCommand("changelevel", mapname)
-	end
+	RunConsoleCommand("changelevel", mapname)
 end
 
 SlashCo.GoToLobby = function()
@@ -354,7 +334,7 @@ SlashCo.HelicopterLand = function(pos)
 		SlashCo.HelicopterRadioVoice(3)
 
 		SlashCo.UpdateObjective("heliwait", SlashCo.ObjStatus.COMPLETE)
-		SlashCo.UpdateObjective("helicopter", SlashCo.ObjStatus.INCOMPLETE)
+		SlashCo.UpdateObjective("helicopter", SlashCo.ObjStatus.INCOMPLETE, nil, true)
 		SlashCo.SendObjectives()
 	end)
 

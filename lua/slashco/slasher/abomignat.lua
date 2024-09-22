@@ -27,7 +27,7 @@ SLASHER.EyeRating = "★★★★☆"
 SLASHER.DiffRating = "★☆☆☆☆"
 
 SLASHER.OnSpawn = function(slasher)
-	SlashCo.PlayGlobalSound("slashco/slasher/abomignat_breathing.wav", 65, slasher)
+	slasher:PlayGlobalSound("slashco/slasher/abomignat_breathing.wav", 65)
 	slasher.AbomignatKills = 0
 end
 
@@ -135,13 +135,13 @@ hook.Add("PlayerDeath", "AbomignatCountKills", function(victim, _, attacker)
 	timer.Remove("AbomignatHit_" .. victim:UserID())
 	if not IsValid(attacker) then return end
 
-	if attacker:GetNWString("Slasher") == "Abomignat" then
+	if attacker.GetNWString and attacker:GetNWString("Slasher") == "Abomignat" then
 		attacker.AbomignatKills = (attacker.AbomignatKills or 0) + 1
 	end
 end)
 
 function SLASHER.HandleDOT(slasher, target)
-	target.AbomignatProcs = target.AbomignatProcs or 6 + slasher.AbomignatKills
+	target.AbomignatProcs = target.AbomignatProcs or 3
 
 	if timer.Exists("AbomignatHit_" .. target:UserID()) then
 		target:TakeDamage(99999, slasher, slasher)
@@ -192,7 +192,7 @@ SLASHER.OnPrimaryFire = function(slasher)
 		slasher:Freeze(true)
 		slasher.SlasherValue2 = 0
 
-		local damage = 15 + slasher.AbomignatKills * 10
+		local damage = 50 + slasher.AbomignatKills * 10
 
 		slasher:LagCompensation(true)
 		local target = slasher:TraceHullAttack(slasher:EyePos(), slasher:LocalToWorld(Vector(45, 0, 0)),

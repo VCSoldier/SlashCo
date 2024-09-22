@@ -67,6 +67,12 @@ concommand.Add("slashco_become_survivor", function(ply, _, args)
 	end
 
 	local id = target:SteamID64()
+	for k, v in ipairs(SlashCo.CurRound.SlasherData.AllSlashers) do
+		if v.s_id == id then
+			SlashCo.CurRound.SlasherData.AllSlashers[k] = nil
+			break
+		end
+	end
 	local found
 	for _, v in ipairs(SlashCo.CurRound.SlasherData.AllSurvivors) do
 		if v.id == id then
@@ -75,6 +81,8 @@ concommand.Add("slashco_become_survivor", function(ply, _, args)
 		end
 	end
 
+	SlashCo.CurRound.Slashers[target:SteamID64()] = nil
+
 	if not found then
 		table.insert(SlashCo.CurRound.SlasherData.AllSurvivors, { id = id, GameContribution = 0 })
 	end
@@ -82,6 +90,7 @@ concommand.Add("slashco_become_survivor", function(ply, _, args)
 	doPrint(ply, "New Survivor successfully assigned.")
 	target:SetTeam(TEAM_SURVIVOR)
 	target:Spawn()
+	SlashCo.BroadcastCurrentRoundData(false)
 end, function(cmd)
 	--this is for autocomplete
 
@@ -148,6 +157,24 @@ concommand.Add("slashco_become_slasher", function(ply, _, args)
 		end
 	end
 
+	local id = target:SteamID64()
+	for k, v in ipairs(SlashCo.CurRound.SlasherData.AllSurvivors) do
+		if v.id == id then
+			SlashCo.CurRound.SlasherData.AllSurvivors[k] = nil
+			break
+		end
+	end
+	local found
+	for _, v in ipairs(SlashCo.CurRound.SlasherData.AllSlashers) do
+		if v.s_id == id then
+			found = true
+			break
+		end
+	end
+	if not found then
+		table.insert(SlashCo.CurRound.SlasherData.AllSlashers, { s_id = id, slasherkey = args[1] })
+	end
+
 	SlashCo.SelectSlasher(args[1], target:SteamID64())
 	SlashCo.ApplySlasherToPlayer(target)
 	SlashCo.OnSlasherSpawned(target)
@@ -163,6 +190,8 @@ concommand.Add("slashco_become_slasher", function(ply, _, args)
 		target:StripWeapons()
 		target:SetTeam(TEAM_SLASHER)
 		target:Spawn()
+
+		SlashCo.BroadcastCurrentRoundData(false)
 	end)
 end, function(cmd, args)
 	--this is for autocomplete
@@ -220,11 +249,15 @@ concommand.Add("slashco_debug_run_survivor", function(ply)
 		return
 	end
 
+	SlashCo.CurRound.SlasherData.AllSurvivors = {}
+
 	g_SlashCoDebug = true
 	timer.Simple(0.5, function()
-		for _, k in ipairs(player.GetAll()) do
+		for _, k in player.Iterator() do
 			k:SetTeam(TEAM_SURVIVOR)
 			k:Spawn()
+
+			table.insert(SlashCo.CurRound.SlasherData.AllSurvivors, { id = k:SteamID64(), GameContribution = 0 })
 			doPrint(ply, k:Name() .. " is now a survivor")
 		end
 	end)

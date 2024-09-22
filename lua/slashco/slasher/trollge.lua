@@ -27,7 +27,37 @@ SLASHER.EyeRating = "★★☆☆☆"
 SLASHER.DiffRating = "★★★★★"
 
 SLASHER.OnSpawn = function(slasher)
-	SlashCo.PlayGlobalSound("slashco/slasher/trollge_breathing.wav", 50, slasher)
+	slasher:PlayGlobalSound("slashco/slasher/trollge_breathing.wav", 50)
+end
+
+local function stopDash(slasher)
+	if not slasher:GetNWBool("TrollgeDashFinish") then
+		slasher:StopSound("slashco/slasher/trollge_screech.mp3")
+		timer.Simple(0.25, function()
+			if not IsValid(slasher) then
+				return
+			end
+
+			slasher:StopSound("slashco/slasher/trollge_screech.mp3")
+		end)
+
+		slasher:EmitSound("slashco/slasher/trollge_exhaust.mp3")
+
+		slasher.SlasherValue4 = 0
+		slasher:SetNWBool("TrollgeDashFinish", true)
+
+		timer.Simple(8, function()
+			if not IsValid(slasher) then
+				return
+			end
+
+			slasher.SlasherValue4 = 0
+			slasher:Freeze(false)
+			slasher:SetNWBool("TrollgeDashFinish", false)
+			slasher:SetNWBool("TrollgeDashing", false)
+			slasher.SlasherValue2 = 1.99
+		end)
+	end
 end
 
 SLASHER.OnTickBehaviour = function(slasher)
@@ -61,7 +91,7 @@ SLASHER.OnTickBehaviour = function(slasher)
 		slasher:SetNWBool("TrollgeTransition", true)
 		slasher:Freeze(true)
 		slasher:StopSound("slashco/slasher/trollge_breathing.wav")
-		SlashCo.PlayGlobalSound("slashco/slasher/trollge_transition.mp3", 125, slasher)
+		slasher:PlayGlobalSound("slashco/slasher/trollge_transition.mp3", 125)
 
 		for p = 1, #player.GetAll() do
 			local ply = player.GetAll()[p]
@@ -74,7 +104,7 @@ SLASHER.OnTickBehaviour = function(slasher)
 			slasher.SlasherValue1 = 1
 			slasher:SetNWBool("TrollgeTransition", false)
 			slasher:Freeze(false)
-			SlashCo.PlayGlobalSound("slashco/slasher/trollge_stage1.wav", 60, slasher)
+			slasher:PlayGlobalSound("slashco/slasher/trollge_stage1.wav", 60)
 
 			slasher:SetRunSpeed(280)
 			slasher:SetWalkSpeed(150)
@@ -95,7 +125,7 @@ SLASHER.OnTickBehaviour = function(slasher)
 		slasher:SetNWBool("TrollgeTransition", true)
 		slasher:Freeze(true)
 		slasher:StopSound("slashco/slasher/trollge_stage1.wav")
-		SlashCo.PlayGlobalSound("slashco/slasher/trollge_transition.mp3", 125, slasher)
+		slasher:PlayGlobalSound("slashco/slasher/trollge_transition.mp3", 125)
 
 		for i = 1, #player.GetAll() do
 			local ply = player.GetAll()[i]
@@ -112,9 +142,9 @@ SLASHER.OnTickBehaviour = function(slasher)
 			slasher.SlasherValue1 = 2
 			slasher:SetNWBool("TrollgeTransition", false)
 			slasher:Freeze(false)
-			SlashCo.PlayGlobalSound("slashco/slasher/trollge_stage6.wav", 60, slasher)
+			slasher:PlayGlobalSound("slashco/slasher/trollge_stage6.wav", 60)
 
-			slasher:SetRunSpeed(450)
+			slasher:SetRunSpeed(550)
 			slasher:SetWalkSpeed(SlashCoSlashers[slasher:GetNWString("Slasher")].ChaseSpeed)
 			final_eyesight = 10
 
@@ -134,37 +164,7 @@ SLASHER.OnTickBehaviour = function(slasher)
 		slasher:SetNWInt("TrollgeStage", v1)
 	end
 
-	local function stopDash()
-		if not slasher:GetNWBool("TrollgeDashFinish") then
-			slasher:StopSound("slashco/slasher/trollge_screech.mp3")
-			timer.Simple(0.25, function()
-				if not IsValid(slasher) then
-					return
-				end
-
-				slasher:StopSound("slashco/slasher/trollge_screech.mp3")
-			end)
-
-			slasher:EmitSound("slashco/slasher/trollge_exhaust.mp3")
-
-			slasher.SlasherValue4 = 0
-			slasher:SetNWBool("TrollgeDashFinish", true)
-
-			timer.Simple(8, function()
-				if not IsValid(slasher) then
-					return
-				end
-
-				slasher.SlasherValue4 = 0
-				slasher:Freeze(false)
-				slasher:SetNWBool("TrollgeDashFinish", false)
-				slasher:SetNWBool("TrollgeDashing", false)
-				slasher.SlasherValue2 = 1.99
-			end)
-		end
-	end
-
-	if v1 == 0 and slasher:GetNWBool("TrollgeDashing") then
+	if slasher:GetNWBool("TrollgeDashing") then
 		local target = nil
 
 		if not slasher:GetNWBool("TrollgeDashFinish") then
@@ -174,33 +174,35 @@ SLASHER.OnTickBehaviour = function(slasher)
 			slasher:SetVelocity(slasher:GetForward() * 100)
 
 			if v4 == 0 then
-				timer.Simple(6, stopDash)
+				timer.Simple(6, function()
+					stopDash(slasher)
+				end)
 			end
 
 			slasher.SlasherValue4 = v4 + 1
 
-			if slasher.SlasherValue4 > 50 then
-				if slasher:GetVelocity():Length() < 450 then
-					stopDash()
+			if target:IsValid() and target:IsPlayer() then
+				stopDash(slasher)
+
+				if target:Team() ~= TEAM_SURVIVOR then
+					return
 				end
 
-				if target:IsValid() and target:IsPlayer() then
-					stopDash()
+				local vPoint = target:GetPos() + Vector(0, 0, 50)
+				local bloodfx = EffectData()
+				bloodfx:SetOrigin(vPoint)
+				util.Effect("BloodImpact", bloodfx)
 
-					if target:Team() ~= TEAM_SURVIVOR then
-						return
-					end
+				target:EmitSound("slashco/slasher/trollge_hit.wav")
 
-					local vPoint = target:GetPos() + Vector(0, 0, 50)
-					local bloodfx = EffectData()
-					bloodfx:SetOrigin(vPoint)
-					util.Effect("BloodImpact", bloodfx)
-
-					target:EmitSound("slashco/slasher/trollge_hit.wav")
-
+				if slasher.SlasherValue1 == 0 then
 					slasher.SlasherValue3 = slasher.SlasherValue3 + 1 + SlashCo.CurRound.OfferingData.SO
 					slasher:SetNWInt("TrollgeBlood", slasher.SlasherValue3)
 				end
+			end
+
+			if slasher.SlasherValue4 > 50 and slasher:GetVelocity():Length() < 450 then
+				stopDash(slasher)
 			end
 		end
 	end
@@ -215,8 +217,6 @@ SLASHER.OnPrimaryFire = function(slasher, target)
 		return
 	end
 
-	local SO = SlashCo.CurRound.OfferingData.SO
-
 	if slasher.SlasherValue2 < 0.01 and not slasher:GetNWBool("TrollgeTransition") then
 		slasher:SetNWBool("TrollgeSlashing", false)
 		timer.Remove("TrollgeSlashDecay")
@@ -229,23 +229,25 @@ SLASHER.OnPrimaryFire = function(slasher, target)
 			slasher:EmitSound("slashco/slasher/trollge_swing.wav")
 
 			if SERVER then
-				local target = slasher:TraceHullAttack(slasher:EyePos(), slasher:LocalToWorld(Vector(45, 0, 0)),
+				local target1 = slasher:TraceHullAttack(slasher:EyePos(), slasher:LocalToWorld(Vector(45, 0, 0)),
 						Vector(-30, -30, -60), Vector(30, 30, 60), 10, DMG_SLASH, 5, false)
 
-				if target:IsPlayer() then
-					if target:Team() ~= TEAM_SURVIVOR then
+				if target1:IsPlayer() then
+					if target1:Team() ~= TEAM_SURVIVOR then
 						return
 					end
 
-					local vPoint = target:GetPos() + Vector(0, 0, 50)
+					local vPoint = target1:GetPos() + Vector(0, 0, 50)
 					local bloodfx = EffectData()
 					bloodfx:SetOrigin(vPoint)
 					util.Effect("BloodImpact", bloodfx)
 
-					target:EmitSound("slashco/slasher/trollge_hit.wav")
+					target1:EmitSound("slashco/slasher/trollge_hit.wav")
 
-					slasher.SlasherValue3 = slasher.SlasherValue3 + 1 + SO
-					slasher:SetNWInt("TrollgeBlood", slasher.SlasherValue3)
+					if slasher.SlasherValue1 == 0 then
+						slasher.SlasherValue3 = slasher.SlasherValue3 + 1 + SlashCo.CurRound.OfferingData.SO
+						slasher:SetNWInt("TrollgeBlood", slasher.SlasherValue3)
+					end
 				end
 			end
 		end)
@@ -271,9 +273,9 @@ SLASHER.OnPrimaryFire = function(slasher, target)
 end
 
 SLASHER.OnMainAbilityFire = function(slasher)
-	if slasher.SlasherValue1 == 0 and not slasher:GetNWBool("TrollgeDashing") and slasher.SlasherValue2 == 0 then
+	if slasher.SlasherValue1 ~= 2 and not slasher:GetNWBool("TrollgeDashing") and slasher.SlasherValue2 == 0 then
 		slasher:SetNWBool("TrollgeDashing", true)
-		SlashCo.PlayGlobalSound("slashco/slasher/trollge_screech.mp3", 125, slasher)
+		slasher:PlayGlobalSound("slashco/slasher/trollge_screech.mp3", 125)
 		slasher:Freeze(true)
 		slasher.SlasherValue2 = 3
 		slasher.SlasherValue4 = 0
@@ -303,8 +305,6 @@ SLASHER.Animator = function(ply)
 					ply.anim_antispam = true
 				end
 			end
-			--else
-			--ply.CalcSeqOverride = ply:LookupSequence("float")
 		end
 	elseif trollge_stage2 then
 		ply.CalcSeqOverride = ply:LookupSequence("fly")
@@ -320,7 +320,8 @@ SLASHER.Animator = function(ply)
 end
 
 SLASHER.CanSeeFlashlights = function(ply)
-	return ply:GetNWBool("TrollgeStage2")
+	return false
+	--return ply:GetNWBool("TrollgeStage2")
 end
 
 SLASHER.Footstep = function()
@@ -365,7 +366,12 @@ SLASHER.InitHud = function(_, hud)
 				hud:SetMeterVisible("blood", true)
 				hud:SetAvatar("default")
 			else
-				hud:SetControlVisible("R", false)
+				if stage == 1 then
+					hud:SetControlVisible("R", true)
+				else
+					hud:SetControlVisible("R", false)
+				end
+
 				hud:SetMeterVisible("blood", false)
 				hud:SetControlText("LMB", "kill survivor")
 				hud:SetAvatar(stage == 1 and "stage1" or "stage2")
@@ -382,24 +388,18 @@ SLASHER.ClientSideEffect = function()
 			continue
 		end
 
-		if not LocalPlayer():GetNWBool("TrollgeStage2") then
-			local l_ang = math.abs(ply:EyeAngles()[1]) + math.abs(ply:EyeAngles()[2]) + math.abs(ply:EyeAngles()[3])
+		local l_ang = math.abs(ply:EyeAngles()[1]) + math.abs(ply:EyeAngles()[2]) + math.abs(ply:EyeAngles()[3])
 
-			if ply.MonitorLook == nil then
-				ply.MonitorLook = 0
-			end
-
-			ply.LookSpeed = math.max(math.abs(ply.MonitorLook - l_ang) * 10, 50) - 50
-			ply.MonitorLook = l_ang
-
-			ply:SetMaterial("lights/white")
-			ply:SetColor(Color(255, 255, 255, (ply.LookSpeed + ply:GetVelocity():Length()) * 3))
-			ply:SetRenderMode(RENDERMODE_TRANSCOLOR)
-		else
-			ply:SetMaterial("lights/white")
-			ply:SetColor(color_white)
-			ply:SetRenderMode(RENDERMODE_TRANSCOLOR)
+		if ply.MonitorLook == nil then
+			ply.MonitorLook = 0
 		end
+
+		ply.LookSpeed = math.max(math.abs(ply.MonitorLook - l_ang) * 5, 50) - 50
+		ply.MonitorLook = l_ang
+
+		ply:SetMaterial("lights/white")
+		ply:SetColor(Color(255, 255, 255, (ply.LookSpeed + ply:GetVelocity():Length()) * 3))
+		ply:SetRenderMode(RENDERMODE_TRANSCOLOR)
 	end
 end
 

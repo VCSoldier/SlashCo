@@ -12,14 +12,10 @@ util.AddNetworkString("mantislashcoSlasherChaseMode")
 util.AddNetworkString("mantislashcoSlasherKillPlayer")
 util.AddNetworkString("mantiSlashCoPickingSlasher")
 util.AddNetworkString("mantiSlashCoSelectSlasher")
---util.AddNetworkString("mantislashcoPickItem")
 util.AddNetworkString("mantislashcoSendLobbyItemGlobal")
 util.AddNetworkString("mantislashcoSendGlobalInfoTable")
 util.AddNetworkString("mantislashcoGlobalSound")
---util.AddNetworkString("mantislashcoGameIntro")
---util.AddNetworkString("mantislashcoRoundEnd")
 util.AddNetworkString("mantislashcoBriefing")
---util.AddNetworkString("mantislashcoBeginOfferingVote")
 util.AddNetworkString("mantislashcoOfferingVoteOut")
 util.AddNetworkString("mantislashcoVoteForOffering")
 util.AddNetworkString("mantislashcoOfferingEndVote")
@@ -30,32 +26,67 @@ util.AddNetworkString("mantislashcoHelicopterMusic")
 util.AddNetworkString("mantislashcoLobbySlasherInformation")
 util.AddNetworkString("mantislashcoSurvivorVoicePrompt")
 util.AddNetworkString("mantislashcoSurvivorPings")
---util.AddNetworkString("mantislashcoSurvivorPreparePing")
 util.AddNetworkString("mantislashcoHelicopterVoice")
 util.AddNetworkString("mantislashcoMapAmbientPlay")
---util.AddNetworkString("mantislashcoSendMapForce")
 
-function SlashCo.PlayGlobalSound(sound, level, ent, vol)
-	if vol == nil then
-		vol = 1
+local ENTITY = FindMetaTable("Entity")
+
+-- play a sound on an entity
+-- this function ensures the sound is played for everyone unlike EmitSound
+function SlashCo.PlayGlobalSound(soundPath, soundLevel, ent, vol, permanent)
+	if not IsValid(ent) or type(soundPath) ~= "string" then
+		return
 	end
 
-	if SERVER then
-		ent:EmitSound(sound, 1, 1, 0)
-		--"Sounds must be precached serverside manually before they can be played.
-		--util.PrecacheSound does not work for this purpose, Entity:EmitSound does the trick"
+	vol = vol or 1
+	soundLevel = soundLevel or 0
 
-		net.Start("mantislashcoGlobalSound")
-		net.WriteTable({ SoundPath = sound, SndLevel = level, Entity = ent, Volume = vol })
-		net.Broadcast()
-	end
+	-- sound must be precached
+	ent:EmitSound(soundPath, 1, 1, 0)
+
+	net.Start("mantislashcoGlobalSound")
+	net.WriteBool(false)
+	net.WriteString(soundPath)
+	net.WriteUInt(ent:EntIndex(), 13)
+	net.WriteUInt(soundLevel, 14)
+	net.WriteFloat(vol)
+	net.WriteBool(permanent)
+	net.Broadcast()
 end
 
+-- possibly easier-to-use version of above
+function ENTITY:PlayGlobalSound(soundPath, soundLevel, vol, permanent)
+	SlashCo.PlayGlobalSound(soundPath, soundLevel, self, vol, permanent)
+end
+
+ENTITY.OldStopSound = ENTITY.OldStopSound or ENTITY.StopSound
+function ENTITY:StopSound(soundPath)
+	self:OldStopSound(soundPath)
+
+	net.Start("mantislashcoGlobalSound")
+	net.WriteBool(true)
+	net.WriteString(soundPath)
+	net.WriteUInt(self:EntIndex(), 13)
+	net.Broadcast()
+end
+
+-- DEPRECATED avoid using this
 PlayGlobalSound = SlashCo.PlayGlobalSound
 
 SlashCo.BroadcastLobbySlasherInformation = function()
 	net.Start("mantislashcoLobbySlasherInformation")
 	net.WriteTable({ player = SlashCo.LobbyData.AssignedSlasher, slasher = SlashCo.LobbyData.PickedSlasher })
+	net.Broadcast()
+end
+
+function SlashCo.LobbyRoundData()
+	local offering = ""
+	if SlashCo.LobbyData.Offering > 0 then
+		offering = SCInfo.Offering[SlashCo.LobbyData.Offering].Name
+	end
+
+	net.Start("mantislashcoSendRoundData")
+	net.WriteTable({ survivors = SlashCo.LobbyData.AssignedSurvivors, slashers = SlashCo.LobbyData.AssignedSlashers, offering = offering })
 	net.Broadcast()
 end
 
@@ -162,7 +193,8 @@ local pointState = {
 	[3] = function() end,
 	[4] = function(ply)
 		ply:SetPoints("escape")
-	end
+	end,
+	[5] = function() end,
 }
 
 local pointStateSlasher = {
@@ -176,7 +208,8 @@ local pointStateSlasher = {
 	end,
 	[4] = function(ply)
 		ply:SetPoints("slasher_escape")
-	end
+	end,
+	[5] = function() end,
 }
 
 --[[ state value:
@@ -192,21 +225,25 @@ SlashCo.RoundOverScreen = function(state)
 
 	--yucky yucky
 	local goodSurvivorTable = {}
-	for _, ply in ipairs(player.GetAll()) do
+	for _, ply in player.Iterator() do
 		for _, v in ipairs(SlashCo.CurRound.SlasherData.AllSurvivors) do
 			if ply:SteamID64() == v.id then
 				table.insert(goodSurvivorTable, ply)
 				pointState[state](ply)
 			end
 		end
-		for _, v in ipairs(SlashCo.CurRound.SlasherData.AllSlashers) do
-			if ply:SteamID64() == v.id then
-				pointStateSlasher[state](ply)
-			end
+		if SlashCo.CurRound.Slashers[ply:SteamID64()] then
+			pointStateSlasher[state](ply)
 		end
 	end
 
-	SlashCo.SendValue(nil, "RoundEnd", state, goodSurvivorTable, SlashCo.CurRound.HelicopterRescuedPlayers)
+	local rescued = {}
+	for _, v in ipairs(SlashCo.CurRound.HelicopterRescuedPlayers) do
+		if not IsValid(v) then continue end
+		table.insert(rescued, v)
+	end
+
+	SlashCo.SendValue(nil, "RoundEnd", state, goodSurvivorTable, rescued)
 end
 
 SlashCo.BroadcastGlobalData = function()
@@ -238,9 +275,9 @@ SlashCo.BroadcastMasterDatabaseForClient = function(ply)
 	net.Send(ply)
 end
 
-SlashCo.HelicopterRadioVoice = function(type)
+SlashCo.HelicopterRadioVoice = function(_type)
 	net.Start("mantislashcoHelicopterVoice")
-	net.WriteUInt(type, 4)
+	net.WriteUInt(_type, 4)
 	net.Broadcast()
 end
 

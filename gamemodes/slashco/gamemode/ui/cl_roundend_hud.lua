@@ -15,7 +15,7 @@ local function showPointSummary(cur)
 
 	local shift = 0
 	for k, v in ipairs(stuff) do
-		if CurTime() - cur < 2 + (totalEntries - k) * 0.25 then
+		if CurTime() - cur < 2 + (totalEntries - k) * 0.35 then
 			continue
 		end
 
@@ -82,12 +82,13 @@ local function printRescued(rescued)
 	return SlashCo.Language(count == 1 and "RescuedOnlyOne" or "Rescued", neatString)
 end
 
-local function printLeftBehind(rescued) --survivors,
+local function printLeftBehind(rescued)
 	local plysLeftBehind = {}
 	for _, v in ipairs(team.GetPlayers(TEAM_SURVIVOR)) do
 		local isRescued
 		for _, v1 in ipairs(rescued) do
-			if v == v1 then
+			if not IsValid(v1) then continue end
+			if v:UserID() == v1:UserID() then
 				isRescued = true
 				break
 			end
@@ -105,16 +106,21 @@ local function printLeftBehind(rescued) --survivors,
 	return SlashCo.Language(count == 1 and "LeftBehindOnlyOne" or "LeftBehind", neatString)
 end
 
-local function printKilled(survivors)
-	local plysKilled = table.Copy(survivors)
-	for k, ply in pairs(plysKilled) do
-		if not IsValid(ply) then
-			table.remove(plysKilled, k)
-			continue
+local function printKilled(survivors, rescued)
+	local plysKilled = {}
+	for k, ply in ipairs(survivors) do
+		if not IsValid(ply) then continue end
+		if ply:Team() == TEAM_SURVIVOR then continue end
+
+		for _, v in ipairs(rescued) do
+			if not IsValid(v) then continue end
+			if ply:UserID() == v:UserID() then
+				goto CONTINUE --needed to continue out of multiple loops
+			end
 		end
-		if ply:Team() == TEAM_SURVIVOR then
-			table.remove(plysKilled, k)
-		end
+
+		table.insert(plysKilled, ply)
+		:: CONTINUE ::
 	end
 
 	local neatString, count = printPlayersNeatly(plysKilled)
@@ -130,12 +136,12 @@ local function teamSummary(lines, survivors, rescued)
 		table.insert(lines, rescuedString)
 	end
 
-	local leftBehindString = printLeftBehind(rescued) --survivors,
+	local leftBehindString = printLeftBehind(rescued)
 	if leftBehindString then
 		table.insert(lines, leftBehindString)
 	end
 
-	local killedString = printKilled(survivors)
+	local killedString = printKilled(survivors, rescued)
 	if killedString then
 		table.insert(lines, killedString)
 	end
@@ -289,7 +295,7 @@ hook.Add("scValue_RoundEnd", "SlashCoRoundEnd", function(state, survivors, rescu
 	local cur = CurTime()
 
 	local linesPlay = table.Reverse(lines)
-	local panel = vgui.Create("Panel") --GetHUDPanel():Add("Panel")
+	local panel = vgui.Create("Panel")
 	panel:Dock(FILL)
 	fadeIn(panel)
 

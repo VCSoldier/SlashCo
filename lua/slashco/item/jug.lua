@@ -3,7 +3,7 @@ local ITEM = {}
 ITEM.Model = "models/slashco/items/jug.mdl"
 ITEM.Name = "Jug"
 ITEM.EntClass = "sc_jug"
-ITEM.Price = 7
+ITEM.Price = 15
 ITEM.Description = "Jug_desc"
 ITEM.CamPos = Vector(50, 0, 0)
 ITEM.ChangesSpeed = true
@@ -51,7 +51,7 @@ end
 hook.Add("Think", "JugFunc", function()
 	if SERVER then
 		for _, surv in ipairs( team.GetPlayers(TEAM_SURVIVOR) ) do
-			if surv:GetNWString("item") ~= "Jug" then continue end
+			if surv:GetItem("item") ~= "Jug" then continue end
 
 			if surv:GetNWBool("CurseOfTheJug") then continue end
 

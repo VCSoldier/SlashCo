@@ -268,8 +268,8 @@ function SlashCo.SpawnItems()
 			local it_pos = v:GetPos()
 			local it_ang = v:GetAngles()
 			local droppedItem = SlashCo.CreateItem(SlashCoItems[item].EntClass, it_pos, it_ang)
-			SlashCo.CurRound.Items[droppedItem] = true
-			Entity(droppedItem):SetCollisionGroup(COLLISION_GROUP_NONE)
+			SlashCo.CurRound.Items[droppedItem:EntIndex()] = true
+			droppedItem:SetCollisionGroup(COLLISION_GROUP_NONE)
 			v:Remove()
 		end
 	end
@@ -351,10 +351,20 @@ function SlashCo.SpawnSlasher()
 	slasherSpawned = true
 end
 
+local function singlePlayerTable()
+	local tbl = {}
+
+	for _, v in player.Iterator() do
+		table.insert(tbl, { Survivors = v:SteamID64(), Item = "none" })
+	end
+
+	return tbl
+end
+
 ---Set up players for the round
 function SlashCo.SetupPlayers()
-	if not sql.TableExists("slashco_table_basedata") or not sql.TableExists("slashco_table_survivordata")
-			or not sql.TableExists("slashco_table_slasherdata") then
+	if not game.SinglePlayer() and (not sql.TableExists("slashco_table_basedata") or not sql.TableExists("slashco_table_survivordata")
+			or not sql.TableExists("slashco_table_slasherdata")) then
 
 		SlashCo.Abort("Missing SQL table data")
 		return
@@ -367,10 +377,23 @@ function SlashCo.SetupPlayers()
 
 	print("[SlashCo] Teams database loaded...")
 
-	local survivors = sql.Query("SELECT * FROM slashco_table_survivordata; ")
-	local slashers = sql.Query("SELECT * FROM slashco_table_slasherdata; ")
 	local becameCovenant = 0
 	local spawn_queue = 0
+	local survivors = sql.Query("SELECT * FROM slashco_table_survivordata; ") or singlePlayerTable()
+	local slashers = sql.Query("SELECT * FROM slashco_table_slasherdata; ") or {}
+
+	timer.Simple(0.5, function()
+		for _, v in ipairs(team.GetPlayers(TEAM_SURVIVOR)) do
+			for _, v1 in ipairs(survivors) do
+				if v1.Survivors == v:SteamID64() then
+					SlashCo.DropAllItems(v) -- if somehow a player grabs an item beforehand
+					SlashCo.ChangeSurvivorItem(v, v1.Item)
+					SlashCo.SendValue(v, "preItem", v1.Item)
+					break
+				end
+			end
+		end
+	end)
 
 	for play = 1, #player.GetAll() do
 		--Assign the teams for the current round
@@ -428,18 +451,10 @@ function SlashCo.SetupPlayers()
 
 		--Nightmare offering >>>>>>>>>>>>>>>>>>>>>
 
-		local query = sql.Query("SELECT * FROM slashco_table_survivordata; ") --This table shouldn't be organized like this.
-
 		for i = 1, #survivors do
 			if id == survivors[i].Survivors then
 				playercur:SetTeam(TEAM_SURVIVOR)
 				playercur:Spawn()
-				for _, v in ipairs(query) do
-					if (v.Survivors == playercur:SteamID64()) then
-						SlashCo.ChangeSurvivorItem(playercur, v.Item)
-						break
-					end
-				end
 				print(playercur:Name() .. " now Survivor")
 
 				break
@@ -486,8 +501,6 @@ function SlashCo.SetupPlayers()
 				spawn_queue = spawn_queue + 1
 
 				table.insert(SlashCo.CurRound.SlashersToBeSpawned, playercur)
-
-				--table.insert(SlashCo.CurRound.SlasherData.AllSlashers, {s_id = playercur:SteamID64()})
 				:: covenant_member ::
 			end
 		end
@@ -625,6 +638,7 @@ local function convertLegacyConfig(name, skip)
 
 			for _, v1 in ipairs(v) do
 				local ent = makeEnt("info_sc_battery", v1)
+				ent.Legacy = true
 				ent.Generators = { gens[k] }
 
 				if IsValid(ent) and gens[k] then

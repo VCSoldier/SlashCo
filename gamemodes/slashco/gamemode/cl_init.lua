@@ -81,6 +81,7 @@ include("ui/slasher_stock/cl_slasher_meter.lua")
 include("ui/slasher_stock/cl_slasher_stock.lua")
 include("ui/slasher_stock/sh_slasher_hudfunctions.lua")
 include("cl_limitedzone.lua")
+include("cl_thirdperson.lua")
 
 CreateClientConVar("slashco_cl_disable_pp", 0, true, false, "Disable post processing effects for survivors.", 0, 1)
 CreateClientConVar("slashco_cl_playermodel", "models/slashco/survivor/male_01.mdl", true, true,
@@ -193,8 +194,14 @@ function SlashCo.DrawHalo(_ents, color, passes, noZ)
 	if noZ == nil then
 		noZ = true
 	end
-	halo.Add(_ents, haloColor, math.abs(math.sin(CurTime())) * 2, math.abs(math.sin(CurTime())) * 2, passes or 1, nil,
-			noZ)
+
+	for k, v in pairs(_ents) do
+		if IsValid(v) and v:IsPlayer() and not v:CanBeSeen() then
+			table.remove(_ents, k)
+		end
+	end
+
+	halo.Add(_ents, haloColor, math.abs(math.sin(CurTime())) * 2, math.abs(math.sin(CurTime())) * 2, passes or 1, nil, noZ)
 end
 
 hook.Add("PreDrawHalos", "octoSlashCoClientPreDrawHalos", function()
@@ -214,7 +221,7 @@ hook.Add("PreDrawHalos", "octoSlashCoClientPreDrawHalos", function()
 		if showHalos then
 			SlashCo.DrawHalo(ents.FindByClass("sc_generator"), "yellow")
 			SlashCo.DrawHalo(team.GetPlayers(TEAM_SURVIVOR), "blue")
-			SlashCo.DrawHalo(team.GetPlayers(TEAM_SLASHER))
+			SlashCo.DrawHalo(team.GetPlayers(TEAM_SLASHER), "red")
 			if showGasCanHalos then
 				SlashCo.DrawHalo(ents.FindByClass("sc_gascan"), "gray")
 			end
@@ -274,7 +281,7 @@ hook.Add("Think", "DynamicFlashlight.Rendering", function()
 	end
 
 	for _, target in ipairs(cache) do
-		if target:GetNWBool("DynamicFlashlight") then
+		if target:GetNWBool("DynamicFlashlight") and target:CanBeSeen() then
 			if target.DynamicFlashlight then
 				local position = target:GetPos()
 				local newposition = Vector(position[1], position[2], position[3] + 40) + target:GetForward() * 20
@@ -313,10 +320,69 @@ net.Receive("mantislashcoGiveSlasherData", function()
 	end
 end)
 
-net.Receive("mantislashcoGlobalSound", function()
-	local t = net.ReadTable()
+SlashCo.GlobalSounds = SlashCo.GlobalSounds or {}
 
-	EmitSound(t.SoundPath, LocalPlayer():GetPos(), t.Entity:EntIndex(), CHAN_AUTO, t.Volume, t.SndLevel)
+timer.Create("PermanentSounds", 1, 0, function()
+	for _, v in pairs(SlashCo.GlobalSounds) do
+		if not v.permanent then
+			continue
+		end
+
+		if not v.snd:IsPlaying() then
+			v.snd:Stop()
+			v.snd:Play()
+		end
+	end
+end)
+
+local function removeSound(soundPath, entID)
+	local entry = SlashCo.GlobalSounds[entID .. soundPath]
+	if not entry then
+		return
+	end
+
+	entry.permanent = false
+	entry.snd:Stop()
+end
+
+local function addSound(soundPath, entID)
+	local soundLevel = net.ReadUInt(14)
+	local vol = net.ReadFloat()
+	local permanent = net.ReadBool()
+
+	--EmitSound(soundPath, LocalPlayer():GetPos(), entID, CHAN_AUTO, vol, soundLevel)
+
+	local ent = Entity(entID)
+	if not IsValid(ent) then
+		return
+	end
+
+	local snd
+	if SlashCo.GlobalSounds[entID .. soundPath] then
+		snd = SlashCo.GlobalSounds[entID .. soundPath].snd
+	else
+		snd = CreateSound(ent, soundPath)
+	end
+
+	snd:Stop() -- it won't play again otherwise
+	snd:Play()
+
+	snd:SetSoundLevel(soundLevel)
+	snd:ChangeVolume(vol)
+
+	SlashCo.GlobalSounds[entID .. soundPath] = { snd = snd, permanent = permanent }
+end
+
+net.Receive("mantislashcoGlobalSound", function()
+	local isRemove = net.ReadBool()
+	local soundPath = net.ReadString()
+	local entID = net.ReadUInt(13)
+
+	if isRemove then
+		removeSound(soundPath, entID)
+	else
+		addSound(soundPath, entID)
+	end
 end)
 
 local KillIcon = Material("slashco/ui/icons/slasher/s_0")
@@ -356,7 +422,7 @@ hook.Add("HUDPaint", "AwaitingPlayersHUD", function()
 		end
 
 		if LocalPlayer():SteamID64() == SurvivorTeam[i].id then
-			draw.SimpleText(SCInfo.Survivor, "LobbyFont2", ScrW() * 0.5, (ScrH() * 0.7),
+			draw.SimpleText(SCInfo.Survivor, "LobbyFont2", ScrW() * 0.5, ScrH() * 0.7,
 					Color(255, 0, 0, slashershow_tick), TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
 		end
 
@@ -473,9 +539,9 @@ hook.Add("PostDrawOpaqueRenderables", "LobbyScreens", function()
 		draw.SimpleText(SlashCo.Language("Name", ""), "BriefingFont", 25 - monitorsize / 2, 250 - monitorsize / 2,
 				color_white)
 		if s_n == "Unknown" then
-			txtcolor = Color(200, 0, 0, (b_tick - 0))
+			txtcolor = Color(200, 0, 0, b_tick - 0)
 		else
-			txtcolor = Color(255, 255, 255, (b_tick - 0))
+			txtcolor = Color(255, 255, 255, b_tick - 0)
 		end
 
 		draw.SimpleText(SlashCo.Language(s_n), "BriefingFont", 900 - monitorsize / 2, 250 - monitorsize / 2, txtcolor,
@@ -485,9 +551,9 @@ hook.Add("PostDrawOpaqueRenderables", "LobbyScreens", function()
 		draw.SimpleText(SlashCo.Language("Class", ""), "BriefingFont", 25 - monitorsize / 2, 350 - monitorsize / 2,
 				color_white)
 		if s_cls == 0 then
-			txtcolor = Color(200, 0, 0, (b_tick - 255))
+			txtcolor = Color(200, 0, 0, b_tick - 255)
 		else
-			txtcolor = Color(255, 255, 255, (b_tick - 255))
+			txtcolor = Color(255, 255, 255, b_tick - 255)
 		end
 
 		draw.SimpleText(s_cls_t, "BriefingFont", 900 - monitorsize / 2, 350 - monitorsize / 2, txtcolor,
@@ -497,13 +563,13 @@ hook.Add("PostDrawOpaqueRenderables", "LobbyScreens", function()
 				450 - monitorsize / 2, color_white)
 
 		if s_dng == 1 then
-			txtcolor = Color(255, 255, 0, (b_tick - (255 * 2)))
+			txtcolor = Color(255, 255, 0, b_tick - 255 * 2)
 		elseif s_dng == 2 then
-			txtcolor = Color(255, 155, 155, (b_tick - (255 * 2)))
+			txtcolor = Color(255, 155, 155, b_tick - 255 * 2)
 		elseif s_dng == 3 then
-			txtcolor = Color(255, 0, 0, (b_tick - (255 * 2)))
+			txtcolor = Color(255, 0, 0, b_tick - 255 * 2)
 		else
-			txtcolor = Color(200, 0, 0, (b_tick - (255 * 2)))
+			txtcolor = Color(200, 0, 0, b_tick - 255 * 2)
 		end
 
 		draw.SimpleText(s_dng_t, "BriefingFont", 900 - monitorsize / 2, 450 - monitorsize / 2, txtcolor,
@@ -561,7 +627,7 @@ end)
 
 local AmbientMusic
 local AmbientLength
-local AmbientVol = 1
+local AmbientVol = 0.8
 
 net.Receive("mantislashcoMapAmbientPlay", function()
 	timer.Simple(math.random(1, 8), function()
@@ -609,31 +675,31 @@ hook.Add("Think", "amb_vol", function()
 			AmbientVol = AmbientVol - RealFrameTime()
 		end
 	else
-		if AmbientVol < 1 then
+		if AmbientVol < 0.8 then
 			AmbientVol = AmbientVol + (RealFrameTime() / 100)
 		end
 	end
 end)
 
-g_SCLoadedSounds = {} --set as global to protect against lua restarts
+g_SCLoadedSounds = g_SCLoadedSounds or {} --set as global to protect against lua restarts
 function SlashCo.ReadSound(fileName)
-	local sound
+	local _sound
 	local filter
 	if not g_SCLoadedSounds[fileName] then
-		sound = CreateSound(game.GetWorld(), fileName, filter)
-		if sound then
-			sound:SetSoundLevel(0)
-			g_SCLoadedSounds[fileName] = { sound, filter }
+		_sound = CreateSound(game.GetWorld(), fileName, filter)
+		if _sound then
+			_sound:SetSoundLevel(0)
+			g_SCLoadedSounds[fileName] = { _sound, filter }
 		end
 	else
-		sound = g_SCLoadedSounds[fileName][1]
+		_sound = g_SCLoadedSounds[fileName][1]
 		filter = g_SCLoadedSounds[fileName][2]
 	end
-	if sound then
-		sound:Stop()
-		sound:Play()
+	if _sound then
+		_sound:Stop()
+		_sound:Play()
 	end
-	return sound
+	return _sound
 end
 
 SC_CLIENT_LOADED = true
