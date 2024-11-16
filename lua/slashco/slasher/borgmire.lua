@@ -29,12 +29,8 @@ SLASHER.DiffRating = "★☆☆☆☆"
 SLASHER.OnSpawn = function(slasher)
 	slasher:SetViewOffset(Vector(0, 0, 85))
 	slasher:SetCurrentViewOffset(Vector(0, 0, 85))
-	PlayGlobalSound("slashco/slasher/borgmire_heartbeat.wav", 50, slasher)
+	slasher:PlayGlobalSound("slashco/slasher/borgmire_heartbeat.wav", 50, nil, true)
 	slasher:SetNWBool("CanChase", true)
-end
-
-SLASHER.PickUpAttempt = function()
-	return false
 end
 
 SLASHER.OnTickBehaviour = function(slasher)
@@ -64,7 +60,7 @@ SLASHER.OnTickBehaviour = function(slasher)
 		slasher.ChaseSound = nil
 
 		if slasher.IdleSound == nil then
-			PlayGlobalSound("slashco/slasher/borgmire_breath_base.wav", 60, slasher, 1)
+			slasher:PlayGlobalSound("slashco/slasher/borgmire_breath_base.wav", 60, nil, true)
 
 			slasher:StopSound("slashco/slasher/borgmire_breath_chase.wav")
 			timer.Simple(0.1, function()
@@ -82,11 +78,9 @@ SLASHER.OnTickBehaviour = function(slasher)
 		slasher:SetWalkSpeed((SLASHER.ChaseSpeed - math.sqrt(v1 * (14 - (SO * 7)))) / v3)
 
 		if slasher.ChaseSound == nil then
-			PlayGlobalSound("slashco/slasher/borgmire_breath_chase.wav", 70, slasher, 1)
-
-			PlayGlobalSound("slashco/slasher/borgmire_anger.mp3", 75, slasher, 1)
-
-			PlayGlobalSound("slashco/slasher/borgmire_anger_far.mp3", 110, slasher, 1)
+			slasher:PlayGlobalSound("slashco/slasher/borgmire_breath_chase.wav", 70, nil, true)
+			slasher:PlayGlobalSound("slashco/slasher/borgmire_anger.mp3", 75)
+			slasher:PlayGlobalSound("slashco/slasher/borgmire_anger_far.mp3", 110)
 
 			slasher:StopSound("slashco/slasher/borgmire_breath_base.wav")
 			timer.Simple(0.1, function()
@@ -102,10 +96,15 @@ SLASHER.OnTickBehaviour = function(slasher)
 end
 
 SLASHER.OnPrimaryFire = function(slasher)
+	if slasher:GetNWBool("BorgmireThrow") then
+		return
+	end
+
 	local SO = SlashCo.CurRound.OfferingData.SO
 
 	if slasher.SlasherValue2 < 0.01 then
 		slasher:SetNWBool("BorgmirePunch", false)
+		slasher.BorgPunching = true
 		timer.Remove("BorgmirePunchDecay")
 		slasher.SlasherValue2 = 2
 
@@ -124,6 +123,8 @@ SLASHER.OnPrimaryFire = function(slasher)
 				return
 			end
 
+			SlashCo.BustDoor(slasher, target, 60000)
+
 			if (target:IsPlayer() and target:Team() == TEAM_SURVIVOR) or target:GetClass() == "prop_ragdoll" then
 				local o = Vector(0, 0, 0)
 
@@ -137,8 +138,6 @@ SLASHER.OnPrimaryFire = function(slasher)
 				util.Effect("BloodImpact", bloodfx)
 
 				target:EmitSound("slashco/slasher/borgmire_hit" .. math.random(1, 2) .. ".mp3")
-
-				SlashCo.BustDoor(slasher, target, 60000)
 			end
 		end)
 
@@ -155,6 +154,7 @@ SLASHER.OnPrimaryFire = function(slasher)
 				end
 
 				slasher:SetNWBool("BorgmirePunch", false)
+				slasher.BorgPunching = false
 			end)
 		end)
 	end
@@ -165,6 +165,10 @@ SLASHER.OnSecondaryFire = function(slasher)
 end
 
 SLASHER.OnSpecialAbilityFire = function(slasher, target)
+	if slasher.BorgPunching then
+		return
+	end
+
 	local SO = SlashCo.CurRound.OfferingData.SO
 
 	if not IsValid(target) or not target:IsPlayer() or slasher:GetNWBool("BorgmireThrow") then

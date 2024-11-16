@@ -13,13 +13,14 @@ include("player_class/player_survivor.lua")
 include("player_class/player_slasher_base.lua")
 include("player_class/player_lobby.lua")
 
-CreateConVar("slashco_player_cycle", "0", FCVAR_REPLICATED) --local cycle_players =
-
 SlashCo = SlashCo or {}
 
-SlashCo.GasCansPerGenerator = 4 --Number of gas cans required to fill up a generator
+SlashCo.GasPerGen = 4 --Default number of gas cans required to fill up a generator
+SlashCo.Generators = 2 --Default number of generators
+SlashCo.GensNeeded = 2 --Default number of generators needed
 SlashCo.GeneratorModel = "models/slashco/other/generator/generator.mdl" --Model path for the generators
 SlashCo.HelicopterModel = "models/slashco/other/helicopter/helicopter.mdl" --Model path for the helicopter
+SlashCo.GhostPingDelay = 480
 
 local lang_files, _ = file.Find("slashco/lang/*.lua", "LUA")
 for _, v in ipairs(lang_files) do
@@ -36,7 +37,6 @@ function GM:Initialize()
 end
 
 function GM:CreateTeams()
-
 	if not GAMEMODE.TeamBased then
 		return
 	end
@@ -52,10 +52,6 @@ function GM:CreateTeams()
 
 	team.SetUp(TEAM_SPECTATOR, "Spectator", Color(135, 206, 235))
 end
-
---[[function GM:PlayerSelectTeamSpawn(team, ply)
-	
-end]]
 
 local DoorSlamWhitelist = {
 	["models/props_c17/door03_left.mdl"] = true,
@@ -74,79 +70,43 @@ function SlashCo.CheckDoorWL(ent)
 	return DoorSlamWhitelist[ent:GetModel()]
 end
 
+function SlashCo.Dampen(speed, from, to)
+	return Lerp(1 - math.exp(-speed * FrameTime()), from, to)
+end
+
 SCInfo = {}
 
-SCInfo.RoundEnd = {
-
-	{
-		On = "The assignment was successful.",
-		Off = "The assignment was unsuccessful.",
-		DB = "The assignment was only partially successful."
-	},
-
-	{
-		FullTeam = "All of the dispatched SlashCo Workers were rescued.",
-		NonFullTeam = "Not all of the dispatched SlashCo Workers could be rescued.",
-		AlivePlayers = " were reported present on the rescue helicopter.",
-		DeadPlayers = " could not make it out alive.",
-		LeftBehindPlayers = " had to be left behind.",
-		Fail = "The dispatched SlashCo Workers could not be rescued.",
-		OnlyOneAlive = " was the only one to survive.",
-	},
-
-	{
-		Loss = " are now presumed either dead or missing in action.",
-		LossOnlyOne = " is now presumed either dead or missing in action.",
-		LossComplete = "The Dispatched SlashCo Workers are now presumed either dead or missing in action.",
-		DBWin = " had to be rescued before the assignment could be completed."
-	}
-
-}
-
 SCInfo.Offering = {
-
 	{
 		Name = "Exposure",
 		Rarity = 1,
-		Description = "Will make Gas Cans easier to find,\nBut\nYou will not find more than you need.",
 		GasCanMod = 0
 	},
-
 	{
 		Name = "Satiation",
 		Rarity = 1,
-		Description = "The Slasher will be a Demon,\nand its items will be scarce,\nBut\nThe items will have greater effect.",
 		GasCanMod = 0
 	},
-
 	{
 		Name = "Drainage",
 		Rarity = 2,
-		Description = "Gas cans will be plentiful,\nBut\nGenerators will leak fuel over time.",
 		GasCanMod = 6
 	},
-
 	{
 		Name = "Duality",
 		Rarity = 3,
-		Description = "Only one generator will need to be powered,\nBut\nYou will face two Slashers.",
 		GasCanMod = 0
 	},
-
 	{
 		Name = "Singularity",
 		Rarity = 3,
-		Description = "Gas Cans will be plentiful,\nBut\nThe Slasher will grow much more powerful.",
 		GasCanMod = 6
 	},
-
 	{
 		Name = "Nightmare",
 		Rarity = 3,
-		Description = "The Helicopter will come rescue you regardless of Generators.\nFueling Generators will come with a massively increased Point bonus.\nBut\nSurvivors and Slasher will switch sides.",
 		GasCanMod = 0
 	}
-
 }
 
 SCInfo.Maps = {
@@ -161,7 +121,7 @@ SCInfo.Maps = {
 	},
 }
 
-local map_configs, _ = file.Find("slashco/configs/maps/*", "LUA")
+local configs, _ = file.Find("slashco/configs/maps/*", "LUA")
 
 local game_playable = false
 
@@ -169,39 +129,95 @@ if SERVER then
 	SCInfo.MinimumMapPlayers = 6
 end
 
-for _, v in ipairs(map_configs) do
-	if v ~= "template.lua" and v ~= "rp_deadcity.lua" then
-		local config_table = util.JSONToTable(file.Read("slashco/configs/maps/" .. v, "LUA"))
-		local mapid = string.Replace(v, ".lua", "")
-
-		if SCInfo.Maps[mapid] then continue end
-
-		SCInfo.Maps[mapid] = {}
-		SCInfo.Maps[mapid].NAME = config_table.Manifest.Name
-		SCInfo.Maps[mapid].DEFAULT = config_table.Manifest.Default
-		SCInfo.Maps[mapid].SIZE = config_table.Manifest.Size
-		SCInfo.Maps[mapid].MIN_PLAYERS = config_table.Manifest.MinimumPlayers
-
-		if SERVER then
-			SCInfo.MinimumMapPlayers = math.min(SCInfo.Maps[mapid].MIN_PLAYERS, SCInfo.MinimumMapPlayers)
-		end
-
-		SCInfo.Maps[mapid].LEVELS = {}
-
-		for ky, lvl in ipairs(config_table.Manifest.Levels) do
-			SCInfo.Maps[mapid].LEVELS[ky] = lvl
-		end
-
-		game_playable = true
+for _, v in ipairs(configs) do
+	local config = util.JSONToTable(file.Read("slashco/configs/maps/" .. v, "LUA"))
+	if not config then
+		continue
 	end
+
+	local mapid = string.Replace(v, ".lua", "")
+	SCInfo.Maps[mapid] = SCInfo.Maps[mapid] or {}
+
+	if type(config.Manifest) == "table" then
+		if config.Manifest.DoNotUseThisConfig then
+			SCInfo.Maps[mapid] = nil
+			continue
+		end
+
+		SCInfo.Maps[mapid].NAME = config.Manifest.Name or "Unspecified Map Name"
+		SCInfo.Maps[mapid].DEFAULT = config.Manifest.Default --wtf does this do...
+		SCInfo.Maps[mapid].MIN_PLAYERS = config.Manifest.MinimumPlayers or 1
+	else
+		SCInfo.Maps[mapid].NAME = "Unspecified Map Name"
+		SCInfo.Maps[mapid].MIN_PLAYERS = 1
+	end
+
+	if SERVER then
+		SCInfo.MinimumMapPlayers = math.min(SCInfo.Maps[mapid].MIN_PLAYERS, SCInfo.MinimumMapPlayers)
+	end
+
+	game_playable = true
 end
 
 if SERVER and not game_playable then
 	timer.Simple(30, function()
 		for _, play in ipairs(player.GetAll()) do
-			play:ChatPrint([[[SlashCo] WARNING! There are no maps mounted! The Gamemode is not playable!
+			play:ChatPrint([[[SlashCo] WARNING! There are no maps mounted! The gamemode is not playable!
                 
 Download the Maps at the Gamemode's workshop page under the "Required Items" section.]])
 		end
 	end)
 end
+
+-- determine if a position is far enough away from generators and survivors
+function SlashCo.IsPositionLegalForSlashers(pos, noSurvivorCheck, distFactor)
+	local dist = (600 + GetGlobal2Int("SlashCoMapSize", 1) * 150) * (distFactor or 1)
+
+	for _, v in ipairs(ents.FindInSphere(pos, dist)) do
+		if v:GetClass() == "sc_generator" then
+			return false
+		end
+	end
+
+	if noSurvivorCheck then
+		return true
+	end
+
+	for _, v in ipairs(team.GetPlayers(TEAM_SURVIVOR)) do
+		if v:GetPos():Distance(pos) < dist then
+			return false
+		end
+	end
+
+	return true
+end
+
+SlashCo.Objectives = {
+	generator = {
+		hasCount = true
+	},
+	helicopter = {},
+	heliwait = {},
+	trash = {
+		hasCount = true,
+		optional = true
+	},
+	mop = {
+		hasCount = true,
+		optional = true
+	},
+	trap = {
+		hasCount = true,
+		optional = true
+	},
+	page = {
+		hasCount = true,
+		optional = true
+	},
+}
+
+SlashCo.ObjStatus = {
+	INCOMPLETE = 0,
+	COMPLETE = 1,
+	FAILED = 2
+}

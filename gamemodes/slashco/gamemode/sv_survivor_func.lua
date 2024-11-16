@@ -27,7 +27,7 @@ local function survivorButtons(ply, button)
 		ply:SetNWBool("Taunt_MNR", true) --Monday Night
 		ply:SetNWBool("Taunt_Griddy", false)
 		ply:SetNWBool("Taunt_Cali", false)
-		ply:EmitSound("slashco/ping_item.mp3", SNDLVL_45dB, 80, 0.4)
+		ply:EmitSound("slashco/ping_item.mp3", 0, 80, 0.4)
 		return
 	end
 	if button == KEY_2 then
@@ -39,7 +39,7 @@ local function survivorButtons(ply, button)
 		ply:SetNWBool("Taunt_Griddy", true) --Hittin the griddy
 		ply:SetNWBool("Taunt_MNR", false)
 		ply:SetNWBool("Taunt_Cali", false)
-		ply:EmitSound("slashco/ping_item.mp3", SNDLVL_45dB, 80, 0.4)
+		ply:EmitSound("slashco/ping_item.mp3", 0, 80, 0.4)
 		return
 	end
 	if button == KEY_3 then
@@ -51,7 +51,7 @@ local function survivorButtons(ply, button)
 		ply:SetNWBool("Taunt_Cali", true) --California girls
 		ply:SetNWBool("Taunt_Griddy", false)
 		ply:SetNWBool("Taunt_MNR", false)
-		ply:EmitSound("slashco/ping_item.mp3", SNDLVL_45dB, 80, 0.4)
+		ply:EmitSound("slashco/ping_item.mp3", 0, 80, 0.4)
 		return
 	end
 end
@@ -64,10 +64,6 @@ hook.Add("PlayerButtonDown", "SurvivorFunctions", function(ply, button)
 
 	survivorButtons(ply, button)
 
-	if game.GetMap() == "sc_lobby" then
-		return
-	end
-
 	--Covenant Tackle
 	if ply:GetNWBool("SurvivorTackled") then
 		if button == KEY_D or button == KEY_A and ply.LastTackleStruggleKey ~= button then
@@ -75,6 +71,8 @@ hook.Add("PlayerButtonDown", "SurvivorFunctions", function(ply, button)
 			ply.TackleStruggle = ply.TackleStruggle or 0
 			ply.TackleStruggle = ply.TackleStruggle + 1
 		end
+
+		return
 	end
 
 	local lookent = ply:GetEyeTrace().Entity
@@ -117,7 +115,14 @@ function PLAYER:SurvivorPing()
 		ExpiryTime = 0
 	}
 
-	if self:GetNWBool("SurvivorBenadrylFull") then
+	ping_info.Player = self
+
+	if self:Team() == TEAM_SPECTATOR then
+		ping_info.Type = "GHOST"
+		look = trace.HitPos
+		ping_info.ExpiryTime = 5
+		ping_info.Player = nil
+	elseif self:GetNWBool("SurvivorBenadrylFull") then
 		ping_info.Type = "SLASHER"
 		look = trace.HitPos
 		ping_info.ExpiryTime = 5
@@ -158,7 +163,10 @@ function PLAYER:SurvivorPing()
 	end
 
 	if ping_info.Type == "DEAD BODY" then
-		player.GetBySteamID64(look.SurvivorSteamID):SetNWBool("ConfirmedDead", true)
+		local deadguy = player.GetBySteamID64(look.SurvivorSteamID)
+		if IsValid(deadguy) then
+			deadguy:SetNWBool("ConfirmedDead", true)
+		end
 	end
 
 	if typeCheck[ping_info.Type] then
@@ -179,10 +187,11 @@ function PLAYER:SurvivorPing()
 	end
 
 	ping_info.Entity = look
-	ping_info.Player = self
 	net.Start("mantislashcoSurvivorPings")
 	net.WriteTable(ping_info)
-	net.Send(team.GetPlayers(TEAM_SURVIVOR))
+	local players = team.GetPlayers(TEAM_SURVIVOR)
+	table.Add(players, team.GetPlayers(TEAM_SPECTATOR))
+	net.Send(players)
 end
 
 function PLAYER:SlamDoor(door_ent)
@@ -263,7 +272,7 @@ function slamDoor(door_ent, pos)
 	end
 
 	timer.Simple(0.5, function()
-		if IsValid( door_ent ) then
+		if IsValid(door_ent) then
 			door_ent:Fire("SetSpeed", oldSpeed) --100
 			door_ent:SetKeyValue("opendir", "0")
 		end

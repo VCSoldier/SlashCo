@@ -14,7 +14,7 @@ PLAYER.SlowWalkSpeed = 100
 PLAYER.WalkSpeed = 200
 PLAYER.RunSpeed = 300
 PLAYER.StartHealth = 100
-PLAYER.MaxHealth = 200
+PLAYER.MaxHealth = 100
 PLAYER.Achievements = {}
 PLAYER.Inventory = {}
 
@@ -29,7 +29,7 @@ function PLAYER:Loadout()
 end
 
 function PLAYER:SetModel()
-	local cl_modelname = self.Player:GetInfo("cl_slashco_playermodel")
+	local cl_modelname = self.Player:GetInfo("slashco_cl_playermodel")
 	local allow = false
 
 	for i = 1, 9 do
@@ -104,7 +104,7 @@ hook.Add("CalcMainActivity", "SurvivorAnimator", function(ply, _)
 	end
 end)
 
-hook.Add("PlayerFootstep", "SurvivorFootstep", function(ply, _, _, _, _, _)
+hook.Add("PlayerFootstep", "SurvivorFootstep", function(ply)
 	--pos, foot, sound, volume, rf
 	if ply:Team() == TEAM_SURVIVOR and ply:ItemFunction("OnFootstep") then
 		return true

@@ -531,3 +531,62 @@ SlashCo.LangTable["full surveillance"] = "full surveillance"
 SlashCo.LangTable["Watcher_watched"] = "YOU ARE BEING WATCHED"
 SlashCo.LangTable["Watcher_observe"] = "OBSERVING A SURVIVOR. . ."
 SlashCo.LangTable["Watcher_stalktime"] = "STALK TIME: "
+
+--THE BRICKLAYER
+SlashCo.LangTable["Kamenchik"] = "THE BRICKLAYER"
+SlashCo.LangTable["Kamenchik_desc"] = [[The Overwhelming Slasher who works for 3 days with no salary.
+
+-THE BRICKLAYER must steal and eat bread to upkeep his inhuman strength.
+-.
+-.]]
+SlashCo.LangTable["Kemenchik_tip"] = "-You may as well give up."
+
+--misc from maptools
+SlashCo.LangTable["spectators_can_ping"] = "Spectators can now ping for survivors."
+SlashCo.LangTable["unhide"] = "unhide" -- for dolphinman to unhide
+SlashCo.LangTable["max pensives"] = "destroy all pensives" -- for smiley dealer once he hits his limits
+SlashCo.LangTable["max zanies"] = "destroy all zanies"
+SlashCo.LangTable["cant_fuel"] = "[ALREADY FULL]"
+SlashCo.LangTable["cant_power"] = "[ALREADY HAS A BATTERY]"
+
+--main objectives
+SlashCo.LangTable["objective_generators"] = "POWER %s GENERATORS"
+SlashCo.LangTable["objective_generator"] = "POWER 1 GENERATOR"
+SlashCo.LangTable["objective_heliwait"] = "WAIT FOR THE HELICOPTER"
+SlashCo.LangTable["objective_helicopter"] = "GET IN THE HELICOPTER"
+
+--optional objectives
+SlashCo.LangTable["objective_trashs"] = "(OPTIONAL) CLEAN UP %s PIECES OF GARBAGE" --item spawns
+SlashCo.LangTable["objective_trash"] = "(OPTIONAL) CLEAN UP 1 PIECE OF GARBAGE"
+SlashCo.LangTable["objective_mops"] = "(OPTIONAL) MOP %s SPILLS" --gen spawns
+SlashCo.LangTable["objective_mop"] = "(OPTIONAL) MOP 1 SPILL"
+SlashCo.LangTable["objective_traps"] = "(OPTIONAL) RESET %s MOUSETRAPS" --battery spawns
+SlashCo.LangTable["objective_trap"] = "(OPTIONAL) RESET 1 MOUSETRAP"
+SlashCo.LangTable["objective_pages"] = "(OPTIONAL) COLLECT %s DOCUMENTS" --gascan spawns
+SlashCo.LangTable["objective_page"] = "(OPTIONAL) COLLECT 1 DOCUMENT"
+
+--points summary
+SlashCo.LangTable["point_summary"] = "- POINTS EARNED -"
+SlashCo.LangTable["point_total"] = "TOTAL POINTS: %s"
+SlashCo.LangTable["point_nil"] = "NONE!"
+
+SlashCo.LangTable["points_slasher_kill"] = "[%s] KILLING" --slashers
+SlashCo.LangTable["points_slasher_demon"] = "[%s] FULLY SATIATED"
+
+SlashCo.LangTable["points_slasher_win"] = "[%s] ALL EMPLOYEES KILLED" --slasher objective thwarting
+SlashCo.LangTable["points_slasher_escape"] = "[%s] MISSION ABORTED"
+SlashCo.LangTable["points_slasher_perfect"] = "[%s] MISSION RUINED"
+
+SlashCo.LangTable["points_objective"] = "[%s] MAIN OBJECTIVE COMPLETE" --objectives
+SlashCo.LangTable["points_optional"] = "[%s] OPTIONAL OBJECTIVE COMPLETE"
+SlashCo.LangTable["points_escape"] = "[%s] SUCCESSFUL MISSION ESCAPE"
+
+SlashCo.LangTable["points_all_survive"] = "[%s] ALL EMPLOYEES SURVIVED" --survival status
+SlashCo.LangTable["points_last_survive"] = "[%s] LAST EMPLOYEE REMAINING"
+SlashCo.LangTable["points_left_behind"] = "[%s] LEFT BEHIND"
+SlashCo.LangTable["points_survive"] = "[%s] SURVIVED"
+
+SlashCo.LangTable["points_item"] = "[%s] ITEM BUY-BACK" --misc points
+SlashCo.LangTable["points_fast"] = "[%s] SWIFT SUCCESS"
+SlashCo.LangTable["points_benadryl"] = "[%s] BENADRYL"
+SlashCo.LangTable["points_working"] = "[%s] DOING YOUR JOB"

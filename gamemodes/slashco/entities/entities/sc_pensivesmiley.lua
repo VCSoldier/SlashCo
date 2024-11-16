@@ -14,7 +14,6 @@ function ENT:Initialize()
 	self:SetCollisionGroup(COLLISION_GROUP_PASSABLE_DOOR)
 
 	self.CollideSwitch = 3
-	self.AttackedPlayer = ""
 	self.AttackEngage = false
 	self.LoseTargetDist = 1000    -- How far the enemy has to be before we lose them
 	self.SearchRadius = 700    -- How far to search for enemies
@@ -36,22 +35,20 @@ end
 -- Returns true if we have an enemy
 ----------------------------------------------------
 function ENT:HaveEnemy()
-	-- If our current enemy is valid
-	if self:GetEnemy() and IsValid(self:GetEnemy()) then
-		-- If the enemy is too far
-		if self:GetRangeTo(self:GetEnemy():GetPos()) > self.LoseTargetDist then
-			-- FindEnemy() will return true if an enemy is found, making this function return true
-			return self:FindEnemy()
-			-- If the enemy is dead( we have to check if its a player before we use Alive() )
-		elseif self:GetEnemy():IsPlayer() and not self:GetEnemy():Alive() then
-			return self:FindEnemy()        -- Return false if the search finds nothing
-		end
-		-- The enemy is neither too far nor too dead so we can return true
-		return true
-	else
-		-- The enemy isn't valid so lets look for a new one
+	local enemy = self:GetEnemy()
+	if not IsValid(enemy) then
 		return self:FindEnemy()
 	end
+
+	if self:GetRangeTo(enemy:GetPos()) > self.LoseTargetDist then
+		return self:FindEnemy()
+	end
+
+	if enemy:IsPlayer() and (not enemy:Alive() or not enemy:CanBeSeen()) then
+		return self:FindEnemy()
+	end
+
+	return true
 end
 
 ----------------------------------------------------
@@ -59,7 +56,7 @@ end
 -- Returns true and sets our enemy if we find one
 ----------------------------------------------------
 function ENT:FindEnemy()
-	if self.AttackedPlayer ~= "" then
+	if IsValid(self.AttackedPlayer) then
 		return false
 	end
 
@@ -95,7 +92,7 @@ function ENT:RunBehaviour()
 	while true do
 		-- Lets use the above mentioned functions to see if we have/can find a enemy
 		self:StartActivity(ACT_IDLE)
-		if self.AttackedPlayer == "" then
+		if not IsValid(self.AttackedPlayer) then
 			if self:HaveEnemy() then
 				-- Now that we have a enemy, the code in this block will run
 				self:SetSequence(self:LookupSequence("attack"))
@@ -119,7 +116,7 @@ function ENT:RunBehaviour()
 				self.GotStuck = nil
 				if pos then
 					local result = self:MoveToPos(pos, {
-						draw = g_SlashCoDebug,
+						draw = g_SlashCoDebug and GetConVar("developer"):GetBool(),
 						maxage = 10,
 						tolerance = 50,
 						lookahead = 600
@@ -133,13 +130,13 @@ function ENT:RunBehaviour()
 
 					coroutine.wait(0.05)
 				else
-					coroutine.wait(1)
+					coroutine.wait(4)
 				end -- Walk to a random place
 				--self:StartActivity( ACT_IDLE )
 			end
 		else
 			self:SetSequence(self:LookupSequence("attack"))
-			self.loco:FaceTowards(player.GetBySteamID64(self.AttackedPlayer):GetPos())    -- Face our enemy
+			self.loco:FaceTowards(self.AttackedPlayer:GetPos())    -- Face our enemy
 			coroutine.wait(math.Rand(12))
 		end
 		-- At this point in the code the bot has stopped chasing the player or finished walking to a random spot
@@ -162,7 +159,7 @@ function ENT:ChaseEnemy(options)
 	while path:IsValid() and self:HaveEnemy() do
 		if path:GetAge() > 0.1 then
 			-- Since we are following the player we have to constantly remake the path
-			path:Compute(self, self:GetEnemy():GetPos())-- Compute the path towards the enemy's position again
+			path:Compute(self, self:GetEnemy():GetPos()) -- Compute the path towards the enemy's position again
 		end
 		path:Update(self)                                -- This function moves the bot along the path
 
@@ -178,7 +175,7 @@ function ENT:ChaseEnemy(options)
 		coroutine.yield()
 	end
 
-	if self.AttackedPlayer ~= "" then
+	if IsValid(self.AttackedPlayer) then
 		coroutine.yield()
 	end
 
@@ -226,10 +223,12 @@ function ENT:HandleStuck()
 			end
 		end
 
+		--[[
 		if lim == 120 then
 			self:EmitSound("physics/body/body_medium_break" .. math.random(2, 4) .. ".wav")
 			self:Remove()
 		end
+		--]]
 
 		coroutine.wait(0.05)
 		lim = math.Clamp(lim + 0.5, 1, 120)
@@ -239,11 +238,19 @@ function ENT:HandleStuck()
 	self.loco:ClearStuck()
 end
 
-function ENT:Think()
-	if CLIENT then
-		return
+if CLIENT then
+	function ENT:Draw()
+		self:DrawModel()
 	end
 
+	return
+end
+
+function ENT:UpdateTransmitState()
+	return TRANSMIT_ALWAYS
+end
+
+function ENT:Think()
 	if self.CollideSwitch > 0 then
 		self:SetNotSolid(true)
 		self.CollideSwitch = self.CollideSwitch - FrameTime()
@@ -272,42 +279,31 @@ function ENT:Think()
 		self.UseCooldown = CurTime()
 	end
 
-	if self.AttackedPlayer == "" then
-		local _ents = ents.FindInSphere(self:GetPos(), self.SearchRadius)
+	if not IsValid(self.AttackedPlayer) then
+		if not self:HaveEnemy() then
+			self:FindEnemy()
+		end
 
-		for _, v in ipairs(_ents) do
-			if (v:IsPlayer() and v:Team() == TEAM_SURVIVOR) then
-				if not self:HaveEnemy() then
-					self:FindEnemy()
-				end
-
-				if v:GetPos():Distance(self:GetPos()) < 150 then
-					self.AttackedPlayer = v:SteamID64()
-					self.Enemy = nil
-				end
+		for _, v in ipairs(ents.FindInSphere(self:GetPos(), self.SearchRadius)) do
+			if v:IsPlayer() and v:Team() == TEAM_SURVIVOR and v:GetPos():Distance(self:GetPos()) < 150 then
+				self.AttackedPlayer = v
+				self.Enemy = nil
 			end
 		end
 	else
-		if not IsValid(player.GetBySteamID64(self.AttackedPlayer)) then
-			self.AttackedPlayer = ""
-			self.Enemy = nil
-		end
-
-		local attacked = player.GetBySteamID64(self.AttackedPlayer)
+		local attacked = self.AttackedPlayer
 		attacked:AddSpeedEffect("smiley", 50, 15)
-
 		attacked:SetNWBool("MarkedBySmiley", true)
 
 		if self.AttackEngage == false then
 			self:EmitSound("slashco/slasher/pensive_attack" .. math.random(1, 2) .. ".mp3")
 
-			timer.Simple(10, function()
+			timer.Simple(20, function()
 				if not IsValid(attacked) then
 					return
 				end
 
 				attacked:RemoveSpeedEffect("smiley")
-
 				attacked:SetNWBool("MarkedBySmiley", false)
 
 				self:Remove()
@@ -318,18 +314,6 @@ function ENT:Think()
 	end
 end
 
-function ENT:UpdateTransmitState()
-	return TRANSMIT_ALWAYS
-end
-
-if CLIENT then
-	function ENT:Draw()
-		self:DrawModel()
-	end
-
-	return
-end
-
 function ENT:Use(activator)
 	if activator:Team() ~= TEAM_SLASHER then
 		return
@@ -337,4 +321,9 @@ function ENT:Use(activator)
 
 	self:EmitSound("physics/body/body_medium_break" .. math.random(2, 4) .. ".wav")
 	self:Remove()
+end
+
+function ENT:OnKilled(dmginfo)
+	self:EmitSound("physics/body/body_medium_break" .. math.random(2, 4) .. ".wav")
+	hook.Run("OnNPCKilled", self, dmginfo:GetAttacker(), dmginfo:GetInflictor())
 end

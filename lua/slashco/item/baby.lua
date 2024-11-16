@@ -8,8 +8,8 @@ ITEM.Price = 35
 ITEM.Description = "Baby_desc"
 ITEM.CamPos = Vector(50,0,0)
 ITEM.DisplayColor = function(ply)
-    local setcolor = 360-math.Clamp(ply:Health(),0,100)*1.2
-    local color = HSVToColor(setcolor,1,0.5)
+    local setcolor = 360 - math.Clamp(ply:Health(), 0, 100) * 1.2
+    local color = HSVToColor(setcolor, 1, 0.5)
 
     return color.r, color.g, color.b, color.a
 end
@@ -22,38 +22,30 @@ ITEM.OnUse = function(ply)
 
     ply:EmitSound("slashco/survivor/baby_use.mp3")
 
-    local deathchance = math.random(0, math.floor( ply:Health() / 5 ) )
-
+    local deathchance = math.random(0, math.floor(ply:Health() / 5))
     local hpafter = ply:Health() / 2
 
-    ply:SetHealth( hpafter )
+    ply:SetHealth(hpafter)
 
     timer.Simple(1, function()
-
         if IsValid(ply) and ply:Team() == TEAM_SURVIVOR then
+            if ply:Health() < 51 and deathchance < 2 then
+                ply:Kill()
+                ply:EmitSound("slashco/survivor/devildie_kill.mp3")
 
-            if ply:Health() < 51 then
-                if deathchance < 2 then
-                    ply:Kill()
-                    ply:EmitSound("slashco/survivor/devildie_kill.mp3")
+                local slasher = team.GetPlayers(TEAM_SLASHER)[#team.GetPlayers(TEAM_SLASHER)]
 
-                    local slasher = team.GetPlayers(TEAM_SLASHER)[#team.GetPlayers(TEAM_SLASHER)]
-
-                    if IsValid(slasher) then
-                        slasher:SetPos(SlashCo.TraceHullLocator())
-                        slasher:EmitSound("slashco/survivor/baby_use.mp3")
-                    end
-                    
-                    return
+                if IsValid(slasher) then
+                    slasher:RandomTeleport()
+                    slasher:EmitSound("slashco/survivor/baby_use.mp3")
                 end
+
+                return
             end
 
-            ply:SetPos(SlashCo.TraceHullLocator())
-
+            ply:RandomTeleport()
         end
     end)
-end
-ITEM.OnDrop = function(ply)
 end
 ITEM.ViewModel = {
     model = "models/props_c17/doll01.mdl",

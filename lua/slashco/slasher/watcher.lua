@@ -33,10 +33,6 @@ SLASHER.OnSpawn = function(slasher)
 	slasher:SetNWBool("CanKill", true)
 end
 
-SLASHER.PickUpAttempt = function()
-	return false
-end
-
 SLASHER.OnTickBehaviour = function(slasher)
 	--local SO = SlashCo.CurRound.OfferingData.SO
 
@@ -45,7 +41,7 @@ SLASHER.OnTickBehaviour = function(slasher)
 	local v3 = slasher.SlasherValue3 --Watched
 	local v4 = slasher.SlasherValue4 --Stalk time
 
-	slasher.SlasherValue3 = BoolToNumber(slasher:GetNWBool("WatcherWatched"))
+	slasher.SlasherValue3 = slasher:GetNWBool("WatcherWatched") and 1 or 0
 
 	if not slasher:GetNWBool("WatcherRage") then
 		if v1 > 0 then
@@ -205,7 +201,7 @@ SLASHER.OnMainAbilityFire = function(slasher)
 	slasher.SlasherValue1 = 10 + (SO * 10)
 	slasher.SlasherValue2 = 100 - (SO * 35)
 
-	PlayGlobalSound("slashco/slasher/watcher_locate.mp3", 100, slasher, 1)
+	slasher:PlayGlobalSound("slashco/slasher/watcher_locate.mp3", 100)
 
 	for _, p in ipairs(team.GetPlayers(TEAM_SURVIVOR)) do
 		p:SetNWBool("WatcherSurveyed", true)
@@ -233,7 +229,7 @@ SLASHER.OnSpecialAbilityFire = function(slasher)
 	end
 
 	slasher:SetNWBool("WatcherRage", true)
-	PlayGlobalSound("slashco/slasher/watcher_rage.wav", 100, slasher, 1)
+	slasher:PlayGlobalSound("slashco/slasher/watcher_rage.wav", 100)
 end
 
 SLASHER.Animator = function(ply)
@@ -285,7 +281,7 @@ SLASHER.InitHud = function(_, hud)
 	hud:ChaseAndKill()
 	hud:AddControl("F", "full surveillance", surveyTable)
 	hud:TieControl("R", "WatcherCanSurvey")
-	hud:TieControlVisible("R", "WatcherRage", true, true, false)
+	hud:TieControlVisible("R", "WatcherRage", true, true)
 
 	hud.prevSurveil = not canSurveil()
 	function hud.AlsoThink()
@@ -297,7 +293,7 @@ SLASHER.InitHud = function(_, hud)
 	end
 
 	function hud.TitleCard.Label:PaintOver()
-		draw.SimpleText("STALK TIME: " .. LocalPlayer():GetNWInt("WatcherStalkTime"), "TVCD", 4, 18, red)
+		draw.SimpleText("STALK TIME: " .. math.Round(LocalPlayer():GetNWInt("WatcherStalkTime"), 1), "TVCD", 4, 18, red)
 	end
 
 	hook.Add("HUDPaint", "SlashCoWatcher", function()
@@ -321,6 +317,10 @@ SLASHER.InitHud = function(_, hud)
 		for _, survivor in ipairs(team.GetPlayers(TEAM_SURVIVOR)) do
 			if not survivor:GetNWBool("SurvivorWatcherSurveyed") then
 				return
+			end
+
+			if not survivor:CanBeSeen() then
+				continue
 			end
 
 			local pos = (survivor:GetPos() + Vector(0, 0, 60)):ToScreen()

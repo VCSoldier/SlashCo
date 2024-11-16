@@ -27,15 +27,12 @@ SLASHER.EyeRating = "★★★★☆"
 SLASHER.DiffRating = "★☆☆☆☆"
 
 SLASHER.OnSpawn = function(slasher)
-	PlayGlobalSound("slashco/slasher/abomignat_breathing.wav", 65, slasher)
-end
-
-SLASHER.PickUpAttempt = function()
-	return false
+	slasher:PlayGlobalSound("slashco/slasher/abomignat_breathing.wav", 65, nil, true)
+	slasher.AbomignatKills = 0
 end
 
 SLASHER.OnTickBehaviour = function(slasher)
-	local SO = SlashCo.CurRound.OfferingData.SO
+	--local SO = SlashCo.CurRound.OfferingData.SO
 
 	v1 = slasher.SlasherValue1 --Main Slash Cooldown
 	v2 = slasher.SlasherValue2 --Forward charge
@@ -85,7 +82,6 @@ SLASHER.OnTickBehaviour = function(slasher)
 	end
 
 	if slasher:GetNWBool("AbomignatCrawling") then
-
 		slasher:SetNWBool("CanChase", false)
 
 		slasher:SetSlowWalkSpeed(350)
@@ -107,7 +103,6 @@ SLASHER.OnTickBehaviour = function(slasher)
 
 		slasher:SetViewOffset(Vector(0, 0, 20))
 		slasher:SetCurrentViewOffset(Vector(0, 0, 20))
-
 	else
 		slasher:SetNWBool("CanChase", slasher:GetNWBool("AbomignatCanMainSlash"))
 
@@ -136,6 +131,42 @@ SLASHER.OnTickBehaviour = function(slasher)
 	slasher:SetNWInt("Slasher_Perception", perception_final)
 end
 
+hook.Add("PlayerDeath", "AbomignatCountKills", function(victim, _, attacker)
+	timer.Remove("AbomignatHit_" .. victim:UserID())
+	if not IsValid(attacker) then return end
+
+	if victim:Team() ~= TEAM_SLASHER and attacker.GetNWString and attacker:GetNWString("Slasher") == "Abomignat" then
+		attacker.AbomignatKills = (attacker.AbomignatKills or 0) + 1
+	end
+end)
+
+function SLASHER.HandleDOT(slasher, target)
+	target.AbomignatProcs = target.AbomignatProcs or 3
+
+	if timer.Exists("AbomignatHit_" .. target:UserID()) then
+		target:TakeDamage(99999, slasher, slasher)
+		target:EmitSound("physics/flesh/flesh_bloody_break.wav")
+		return
+	end
+
+	timer.Create("AbomignatHit_" .. target:UserID(), 0.75, target.AbomignatProcs, function()
+		if not IsValid(target) or target:Team() == TEAM_SPECTATOR then
+			return
+		end
+
+		target:TakeDamage(3, slasher, slasher)
+
+		local vPoint = target:GetPos() + Vector(0, 0, 50)
+		local bloodfx = EffectData()
+		bloodfx:SetOrigin(vPoint)
+		util.Effect("BloodImpact", bloodfx)
+
+		target:EmitSound("physics/flesh/flesh_squishy_impact_hard" .. math.random(1, 4) .. ".wav")
+	end)
+
+	target.AbomignatProcs = target.AbomignatProcs + 3
+end
+
 SLASHER.OnPrimaryFire = function(slasher)
 	local SO = SlashCo.CurRound.OfferingData.SO
 
@@ -148,7 +179,7 @@ SLASHER.OnPrimaryFire = function(slasher)
 	if slasher.SlasherValue1 > 0 then
 		return
 	end
-	--slasher:Freeze(true)
+
 	slasher:SetNWBool("AbomignatSlashing", true)
 	slasher.SlasherValue1 = 6 - (SO * 3)
 	slasher.SlasherValue2 = 6
@@ -161,17 +192,26 @@ SLASHER.OnPrimaryFire = function(slasher)
 		slasher:Freeze(true)
 		slasher.SlasherValue2 = 0
 
+		local damage = 50 + slasher.AbomignatKills * 10
+
 		slasher:LagCompensation(true)
 		local target = slasher:TraceHullAttack(slasher:EyePos(), slasher:LocalToWorld(Vector(45, 0, 0)),
-				Vector(-30, -30, -60), Vector(30, 30, 60), 35, DMG_SLASH, 5, false)
+				Vector(-40, -40, -60), Vector(40, 40, 60), damage, DMG_SLASH, 5, false)
 		slasher:LagCompensation(false)
 
 		SlashCo.BustDoor(slasher, target, 20000)
+
+		timer.Simple(1.3, function()
+			slasher:SetNWBool("AbomignatSlashing", false)
+			slasher:Freeze(false)
+		end)
 
 		if target:IsPlayer() then
 			if target:Team() ~= TEAM_SURVIVOR then
 				return
 			end
+
+			SLASHER.HandleDOT(slasher, target)
 
 			local vPoint = target:GetPos() + Vector(0, 0, 50)
 			local bloodfx = EffectData()
@@ -180,11 +220,6 @@ SLASHER.OnPrimaryFire = function(slasher)
 
 			target:EmitSound("slashco/slasher/trollge_hit.wav")
 		end
-
-		timer.Simple(1.3, function()
-			slasher:SetNWBool("AbomignatSlashing", false)
-			slasher:Freeze(false)
-		end)
 	end
 
 	timer.Create(slasher:EntIndex() .. "_AbomignatSlash", 1, 1, SlashFinish)
@@ -195,8 +230,6 @@ SLASHER.OnSecondaryFire = function(slasher)
 end
 
 SLASHER.OnMainAbilityFire = function(slasher)
-	local SO = SlashCo.CurRound.OfferingData.SO
-
 	if slasher:GetNWBool("AbomignatCrawling") then
 		slasher:SetNWBool("AbomignatCrawling", false)
 		slasher.ChaseActivationCooldown = SLASHER.ChaseCooldown
@@ -204,7 +237,6 @@ SLASHER.OnMainAbilityFire = function(slasher)
 		slasher:SlasherHudFunc("SetControlVisible", "LMB", true)
 		slasher:SlasherHudFunc("SetControlVisible", "RMB", true)
 		slasher:SlasherHudFunc("SetControlVisible", "F", true)
-		--slasher:SlasherHudFunc("ShakeControl", "R")
 		return
 	end
 
@@ -230,7 +262,6 @@ SLASHER.OnMainAbilityFire = function(slasher)
 		slasher:SlasherHudFunc("SetControlVisible", "LMB", false)
 		slasher:SlasherHudFunc("SetControlVisible", "RMB", false)
 		slasher:SlasherHudFunc("SetControlVisible", "F", false)
-		--slasher:SlasherHudFunc("ShakeControl", "R")
 	end
 end
 

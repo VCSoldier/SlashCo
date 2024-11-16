@@ -4,17 +4,12 @@ ITEM.Model = "models/props_junk/glassjug01.mdl"
 ITEM.Name = "\"Moonshine\""
 ITEM.EntClass = "sc_alcohol"
 ITEM.Description = "Unfortunate."
-ITEM.CamPos = Vector(30,0,0)
+ITEM.CamPos = Vector(30, 0, 0)
 ITEM.ReplacesWorldProps = true
 ITEM.IsSpawnable = true
 ITEM.OnUse = function(ply)
-	ply:EmitSound("slashco/survivor/soda_drink"..math.random(1,2)..".mp3")
+	ply:EmitSound("slashco/survivor/soda_drink" .. math.random(1, 2) .. ".mp3")
 	ply:AddEffect("Buzzed", 45)
-end
-ITEM.OnDrop = function()
-end
-ITEM.DisplayColor = function()
-	return 0, 128, 0, 255
 end
 ITEM.ViewModel = {
 	model = ITEM.Model,

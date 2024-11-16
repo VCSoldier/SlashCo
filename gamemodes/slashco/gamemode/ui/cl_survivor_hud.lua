@@ -1,41 +1,39 @@
-CreateClientConVar("slashcohud_show_lowhealth", 1, true, false,
+CreateClientConVar("slashco_cl_show_lowhealth", 1, true, false,
 		"Whether to display the survivor's hud as blinking yellow when at low health.", 0, 1)
-CreateClientConVar("slashcohud_show_healthvalue", 0, true, false,
+CreateClientConVar("slashco_cl_show_healthvalue", 0, true, false,
 		"Whether to display the value of the survivor's health on their hud.", 0, 1)
 
 local SlashCoItems = SlashCoItems
 local prevHp, SetTime, ShowDamage, prevHp1, aHp, TimeToFuel, TimeUntilFueled
 local FuelingCan
 local IsFueling
-local maxHp = 100 --ply:GetMaxHealth() seems to be 200
-local global_pings = {}
+local maxHp = 100
+local healthIndicatorShift = 0
 
-local red = Color(255, 64, 64)
-local green = Color(64, 255, 64)
-local blue = Color(64, 64, 255)
+local screenMessage
 
-local function FindPos(search)
-	if type(search) == "Entity" then
-		return search:WorldSpaceCenter()
-	elseif type(search) == "Vector" then
-		return search
+hook.Add("scValue_cantFuel", "CantFuel", function()
+	screenMessage = "cant_fuel"
+	timer.Create("ScreenMessage", 1.5, 1, function()
+		screenMessage = nil
+	end)
+end)
+
+hook.Add("scValue_cantPower", "CantPower", function()
+	screenMessage = "cant_power"
+	timer.Create("ScreenMessage", 1.5, 1, function()
+		screenMessage = nil
+	end)
+end)
+
+local function showScreenMessage()
+	if not screenMessage then
+		return
 	end
+
+	local parsedItem = markup.Parse("<font=TVCD>" .. SlashCo.Language(screenMessage) .. "</font>")
+	parsedItem:Draw(ScrW() / 2, ScrH() / 2, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
 end
-
-local pingType = {
-	ITEM = function(v)
-		return v.Name or "Item"
-	end,
-	SURVIVOR = function(v)
-		return v.SurvivorName, blue
-	end,
-	SLASHER = function()
-		return nil, red
-	end,
-	GENERATOR = function()
-		return nil, green
-	end
-}
 
 net.Receive("mantislashcoGasPourProgress", function()
 	TimeToFuel = net.ReadUInt(8)
@@ -44,40 +42,12 @@ net.Receive("mantislashcoGasPourProgress", function()
 	TimeUntilFueled = net.ReadFloat()
 end)
 
-local function removePing(key)
-	global_pings[key] = nil
-	--table.RemoveByValue(global_pings, key)
-end
-
-net.Receive("mantislashcoSurvivorPings", function()
-	local ping = net.ReadTable()
-
-	for k, v in pairs(global_pings) do
-		local pn = v
-		if pn.Player == ping.Player then
-			removePing(k)
-			break
-		end
-	end
-
-	if ping.Type == "GENERATOR" then
-		LocalPlayer():EmitSound("slashco/ping_generator.mp3")
-	elseif ping.Type ~= "LOOK HERE" and ping.Type ~= "LOOK AT THIS" then
-		LocalPlayer():EmitSound("slashco/ping_item.mp3")
-	end
-
-	ping.ID = math.random(2 ^ 31 - 1)
-	global_pings[ping.ID] = ping
-
-	if ping.ExpiryTime and ping.ExpiryTime > 0 then
-		timer.Simple(ping.ExpiryTime, function()
-			removePing(ping.ID)
-		end)
-	end
-end)
-
 hook.Add("DrawOverlay", "SlashCoVHS", function()
-	if IsValid(LocalPlayer()) and LocalPlayer():Team() ~= TEAM_SURVIVOR then
+	if not IsValid(LocalPlayer()) then
+		return
+	end
+
+	if not LocalPlayer().Team or LocalPlayer():Team() ~= TEAM_SURVIVOR then
 		return
 	end
 
@@ -90,140 +60,112 @@ hook.Add("DrawOverlay", "SlashCoVHS", function()
 	end
 end)
 
-hook.Add("HUDPaint", "SurvivorHUD", function()
-	local ply = LocalPlayer()
+local objectives = {}
 
-	if ply:Team() ~= TEAM_SURVIVOR then
+net.Receive("SlashCoUpdateObjectives", function()
+	objectives = {}
+	local count = net.ReadUInt(8)
+	for i = 1, count do
+		local name = net.ReadString()
+		if not SlashCo.Objectives[name] then
+			continue
+		end
+
+		local obj = {}
+		obj.name = name
+		obj.status = net.ReadUInt(4)
+
+		if SlashCo.Objectives[name].hasCount then
+			obj.count = net.ReadUInt(16)
+		end
+
+		table.insert(objectives, obj)
+	end
+end)
+
+local function drawObjectives()
+	if table.IsEmpty(objectives) then
 		return
 	end
 
-	local gas
-	if IsFueling then
-		gas = (TimeUntilFueled - CurTime()) / TimeToFuel
-		if not input.IsButtonDown(KEY_E) then
-			IsFueling = false
-		elseif CurTime() >= TimeUntilFueled then
-			IsFueling = false
+	local shift = 0
+	for k, v in ipairs(objectives) do
+		local count = 1
+		if SlashCo.Objectives[v.name].hasCount then
+			count = v.count or count
 		end
+
+		local langText = SlashCo.Language("objective_" .. v.name .. (count > 1 and "s" or ""), count)
+
+		local complete = " "
+		local r, g, b = 255, 255, 255
+		if v.status == SlashCo.ObjStatus.FAILED then
+			r, g, b = 255, 64, 64
+		elseif v.status == SlashCo.ObjStatus.COMPLETE then
+			complete = "X"
+		end
+
+		local str = string.format("<font=TVCD_small><color=%s,%s,%s>[%s] %s</color></font>", r, g, b, complete, langText)
+		local parsedItem = markup.Parse(str)
+
+		parsedItem:Draw(ScrW() * 0.975 - 4, ScrH() * 0.05 + shift, TEXT_ALIGN_RIGHT, TEXT_ALIGN_TOP)
+
+		if v.status == SlashCo.ObjStatus.FAILED then
+			surface.SetDrawColor(255, 64, 64, 128)
+			surface.DrawRect(ScrW() * 0.975 - 8 - parsedItem:GetWidth(), ScrH() * 0.05 + shift + 6, parsedItem:GetWidth() + 8, 2)
+		end
+
+		shift = shift + 14 + 8
+	end
+end
+
+local function drawItemDisplay(item, notUsable, moveUp, shift)
+	if not SlashCoItems[item] then
+		return false, 0
 	end
 
-	--//item display//--
+	shift = shift or 0
+	local y = moveUp and 35 or 0
 
-	local HeldItem = ply:GetNWString("item", "none")
-	if SlashCoItems[HeldItem or "none"] then
-		local parsedItem = markup.Parse("<font=TVCD>---     " .. string.upper(SlashCo.Language(HeldItem)) .. "     ---</font>")
-		surface.SetDrawColor(ply:ItemFunctionOrElse("DisplayColor", { 0, 0, 128 }))
-		surface.DrawRect(ScrW() * 0.975 - parsedItem:GetWidth() - 8, ScrH() * 0.95 - 24, parsedItem:GetWidth() + 8, 27)
-		parsedItem:Draw(ScrW() * 0.975 - 4, ScrH() * 0.95, TEXT_ALIGN_RIGHT, TEXT_ALIGN_BOTTOM)
+	local dash = notUsable and "vvv" or "---"
+	local space = "   "
+	local defaultColor = { 0, 0, 128 }
 
-		local offset = 0
-		if SlashCoItems[HeldItem].OnUse then
-			draw.SimpleText(SlashCo.Language("item_use", "R"), "TVCD", ScrW() * 0.975 - 4, ScrH() * 0.95 - 30,
-					color_white, TEXT_ALIGN_RIGHT,
-					TEXT_ALIGN_BOTTOM)
-			offset = 30
-		end
-		if SlashCoItems[HeldItem].OnDrop then
-			draw.SimpleText(SlashCo.Language("item_drop", "Q"), "TVCD", ScrW() * 0.975 - 4, ScrH() * 0.95 - 30 - offset,
-					color_white,
-					TEXT_ALIGN_RIGHT, TEXT_ALIGN_BOTTOM)
-		end
+	if SlashCoItems[item].IsSecondary then
+		dash = string.sub(dash, 1, 1)
+		defaultColor = { 0, 128, 0 }
+		space = "  "
 	end
 
-	--//gas fuel meter//--
+	local str = string.format("<font=TVCD>%s%s%s%s%s</font>", dash, space, string.upper(SlashCo.Language(item)), space, dash)
+	local parsedItem = markup.Parse(str)
+	surface.SetDrawColor(LocalPlayer():ItemFunction2OrElse("DisplayColor", item, defaultColor))
+	surface.DrawRect(ScrW() * 0.975 - parsedItem:GetWidth() - shift - 8, ScrH() * 0.95 - 24 - y, parsedItem:GetWidth() + 8, 27)
+	parsedItem:Draw(ScrW() * 0.975 - 4 - shift, ScrH() * 0.95 - y, TEXT_ALIGN_RIGHT, TEXT_ALIGN_BOTTOM)
 
-	local hitPos = ply:GetShootPos()
-	if IsFueling and IsValid(FuelingCan) then
-		local genPos = FuelingCan:GetPos()
-		local realDistance = hitPos:Distance(genPos)
-		if realDistance < 100 then
-			genPos = genPos:ToScreen()
-			local fade = math.Round((100 - realDistance) * 2.8)
-			local parsedTotal = markup.Parse(string.format("<font=TVCD>%s %s %sL</font>",
-					SlashCo.Language("FUEL"),
-					string.rep("█", 8),
-					math.Round(gas * 10)))
-			local width = parsedTotal:GetWidth()
-			local xClamp = math.Clamp(genPos.x, ScrW() * 0.025 + width / 2, ScrW() * 0.975 - width / 2)
-			local yClamp = math.Clamp(genPos.y, ScrH() * 0.05 + 24, ScrH() * 0.95 - 51)
-			local half = math.Clamp((gas * 8), 0, 8) % 1 >= 0.5
-
-			surface.SetDrawColor(0, 128, 0, fade)
-			surface.DrawRect(xClamp - width / 2 + 2, yClamp - 13, width, 27)
-			draw.SimpleText(math.Round(gas * 10) .. "L", "TVCD", xClamp + width / 2, yClamp,
-					Color(255, 255, 255, fade), TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
-			draw.SimpleText(SlashCo.Language("FUEL") .. " " .. string.rep("█", gas * 8) .. (half and "▌" or ""),
-					"TVCD", xClamp + 2 - width / 2,
-					yClamp, Color(255, 255, 255, fade), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
-		else
-			IsFueling = false
-		end
+	if notUsable then
+		return true, parsedItem:GetWidth() + 48
 	end
 
-	--//prompts for items//--
-
-	if LocalPlayer():GetVelocity():Length() > 250 and game.GetMap() ~= "sc_lobby" then
-		local lookent = LocalPlayer():GetEyeTrace().Entity
-		if IsValid(lookent) and lookent:GetClass() == "prop_door_rotating" and SlashCo.CheckDoorWL(lookent) then
-			if lookent:GetPos():Distance(LocalPlayer():GetPos()) < 150 and not lookent.IsOpen then
-				draw.SimpleText(SlashCo.Language("door_slam", "LMB"), "TVCD", ScrW() / 2, ScrH() / 2, color_white,
-						TEXT_ALIGN_CENTER,
-						TEXT_ALIGN_CENTER)
-			end
-		end
+	local offset = 0
+	if SlashCoItems[item].OnUse then
+		draw.SimpleText(SlashCo.Language("item_use", "R"), "TVCD", ScrW() * 0.975 - shift - 8, ScrH() * 0.95 - 30 - y,
+				color_white, TEXT_ALIGN_RIGHT, TEXT_ALIGN_BOTTOM)
+		offset = 27
+	end
+	if not LocalPlayer():ItemFunction2("PreDrop", item) then
+		draw.SimpleText(SlashCo.Language("item_drop", "Q"), "TVCD", ScrW() * 0.975 - shift - 8, ScrH() * 0.95 - 30 - offset - y,
+				color_white, TEXT_ALIGN_RIGHT, TEXT_ALIGN_BOTTOM)
 	end
 
-	--ping display
-	for k, v in pairs(global_pings) do
-		if v.Entity == nil then
-			continue
-		end
+	return true, parsedItem:GetWidth() + 48
+end
 
-		if type(v.Entity) ~= "Vector" and not IsValid(v.Entity) then
-			removePing(k)
-			continue
-		end
-
-		if not IsValid(v.Player) then
-			removePing(k)
-			continue
-		end
-
-		local showText, textColor, pos
-		if pingType[v.Type] then
-			showText, textColor, pos = pingType[v.Type](v)
-		end
-		showText = showText or v.Type or "INVALID"
-		textColor = textColor or color_white
-		pos = pos or (FindPos(v.Entity)):ToScreen()
-
-		draw.SimpleText(v.Player:GetName(), "TVCD_small", pos.x, pos.y - 25, Color(255, 255, 255, 180),
-				TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-		draw.SimpleText("[" .. SlashCo.Language(showText) .. "]", "TVCD", pos.x, pos.y, textColor, TEXT_ALIGN_CENTER,
-				TEXT_ALIGN_CENTER)
-	end
-
-	for k, v in ipairs( ents.FindByClass("sc_flare") ) do
-
-		if not v:GetNWBool("FlareActive") then continue end
-
-		local fl_pos = fl_pos or (v:GetPos()):ToScreen()
-
-		draw.SimpleText(v:GetNWString("FlareDropperName"), "TVCD_small", fl_pos.x, fl_pos.y - 25, Color(255, 255, 255, 180),
-				TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-		draw.SimpleText("[ ☆ ]", "TVCD", fl_pos.x, fl_pos.y, textColor, TEXT_ALIGN_CENTER,
-				TEXT_ALIGN_CENTER)
-		draw.SimpleText(tostring( math.floor(LocalPlayer():GetPos():Distance( v:GetPos() ) * 0.0254)).." m", "TVCD_small", fl_pos.x, fl_pos.y + 25, Color(255, 255, 255, 180),
-				TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-
-	end
-
-	--//item selection crosshair//--
-
+local function selectCrosshair(hitPos)
 	for _, v in pairs(ents.FindInSphere(hitPos, 100)) do
 		if v.IsSelectable and not (IsFueling and FuelingCan == v) then
 			local gasPos = v:WorldSpaceCenter()
-			local trace = util.QuickTrace(hitPos, gasPos - hitPos, ply)
+			local trace = util.QuickTrace(hitPos, gasPos - hitPos, LocalPlayer())
 			if not trace.Hit or trace.Entity == v then
 				local realDistance = hitPos:Distance(gasPos)
 				gasPos = gasPos:ToScreen()
@@ -243,46 +185,104 @@ hook.Add("HUDPaint", "SurvivorHUD", function()
 			end
 		end
 	end
+end
 
-	--//health//--
+local function slamIndicator()
+	if LocalPlayer():GetVelocity():Length() <= 250 then
+		return
+	end
 
-	local hp = ply:Health()
+	local lookent = LocalPlayer():GetEyeTrace().Entity
+	if not IsValid(lookent) or lookent:GetClass() ~= "prop_door_rotating" or not SlashCo.CheckDoorWL(lookent) then
+		return
+	end
 
-	if hp > (prevHp or 100) then
+	if lookent:GetPos():Distance(LocalPlayer():GetPos()) >= 150 or lookent.IsOpen then
+		return
+	end
+
+	draw.SimpleText(SlashCo.Language("door_slam", "LMB"), "TVCD", ScrW() / 2, ScrH() / 2, color_white, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+end
+
+local function gasFuelMeter(hitPos)
+	local gas
+	if IsFueling then
+		gas = (TimeUntilFueled - CurTime()) / TimeToFuel
+		if not input.IsButtonDown(KEY_E) then
+			IsFueling = false
+		elseif CurTime() >= TimeUntilFueled then
+			IsFueling = false
+		end
+	end
+
+	if IsFueling and IsValid(FuelingCan) then
+		local genPos = FuelingCan:GetPos()
+		local realDistance = hitPos:Distance(genPos)
+		if realDistance < 100 then
+			genPos = genPos:ToScreen()
+			local fade = math.Round((100 - realDistance) * 2.8)
+			local parsedTotal = markup.Parse(string.format("<font=TVCD>%s %s %sL</font>",
+					SlashCo.Language("FUEL"),
+					string.rep("█", 8),
+					math.Round(gas * 10)))
+			local width = parsedTotal:GetWidth()
+			local xClamp = math.Clamp(genPos.x, ScrW() * 0.025 + width / 2, ScrW() * 0.975 - width / 2)
+			local yClamp = math.Clamp(genPos.y, ScrH() * 0.05 + 24, ScrH() * 0.95 - 51)
+			local half = math.Clamp(gas * 8, 0, 8) % 1 >= 0.5
+
+			surface.SetDrawColor(0, 128, 0, fade)
+			surface.DrawRect(xClamp - width / 2 + 2, yClamp - 13, width, 27)
+			draw.SimpleText(math.Round(gas * 10) .. "L", "TVCD", xClamp + width / 2, yClamp,
+					Color(255, 255, 255, fade), TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
+			draw.SimpleText(SlashCo.Language("FUEL") .. " " .. string.rep("█", gas * 8) .. (half and "▌" or ""),
+					"TVCD", xClamp + 2 - width / 2,
+					yClamp, Color(255, 255, 255, fade), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+		else
+			IsFueling = false
+		end
+	end
+end
+
+local function hpMeter()
+	local hp = LocalPlayer():Health()
+
+	if hp > (prevHp or maxHp) then
 		--reset damage indicator upon healing
-		prevHp = math.Clamp(hp, 0, 100)
+		prevHp = math.Clamp(hp, 0, maxHp)
 		SetTime = 0
 	end
 
 	if CurTime() >= (SetTime or 0) then
 		if ShowDamage then
 			--update prevHp once the indicator time is up
-			prevHp = math.Clamp(hp, 0, 100)
+			prevHp = math.Clamp(hp, 0, maxHp)
 			ShowDamage = false
 		end
 
 		if hp < (prevHp or 100) then
 			--start the damage indicator time
-			prevHp1 = math.Clamp(hp, 0, 100)
+			prevHp1 = math.Clamp(hp, 0, maxHp)
 			ShowDamage = true
-			SetTime = CurTime() + 2.1
+			SetTime = CurTime() + 2
+			healthIndicatorShift = CurTime()
 		end
 	elseif hp < prevHp1 then
 		--reset indicator time if more damage is taken
-		prevHp1 = math.Clamp(hp, 0, 100)
-		SetTime = CurTime() + 2.1
+		prevHp1 = math.Clamp(hp, 0, maxHp)
+		SetTime = CurTime() + 2
 	end
 
-	aHp = Lerp(FrameTime() * 3, (aHp or 100), hp)
-	local displayPrevHpBar = (CurTime() % 0.7 > 0.35) and math.Round(math.Clamp(((prevHp or 100) - hp) / maxHp, 0,
-			1) * 26.9) or 0
+	local prevHpBar = math.Round(math.Clamp(((prevHp or maxHp) - hp) / maxHp, 0, 1) * 26.9)
+
+	aHp = Lerp(FrameTime() * 3, aHp or 100, hp)
 	local parsed
 
-	if hp >= 25 or not GetConVar("slashcohud_show_lowhealth"):GetBool() then
-		local hpOver = math.Clamp(hp - maxHp, 0, 100)
-		local hpAdjust = math.Clamp(hp, 0, 100) - hpOver
+	if hp >= 25 or not GetConVar("slashco_cl_show_lowhealth"):GetBool() then
+		local hpOver = math.Clamp(hp - maxHp, 0, maxHp)
+		local hpAdjust = math.Clamp(hp, 0, maxHp) - hpOver
 		local displayHpBar = math.Round(math.Clamp(hpAdjust / maxHp, 0, 1) * 27)
 		local displayHpOverBar = math.Round(math.Clamp(hpOver / maxHp, 0, 1) * 27)
+		local displayPrevHpBar = ((CurTime() - healthIndicatorShift) % 0.7 < 0.35) and prevHpBar or 0
 		parsed = markup.Parse(string.format("<font=TVCD>%s <colour=0,255,255,255>%s</colour>%s<colour=255,0,0,255>%s</colour></font>",
 				SlashCo.Language("HP"),
 				string.rep("█", displayHpOverBar),
@@ -291,18 +291,19 @@ hook.Add("HUDPaint", "SurvivorHUD", function()
 		))
 	else
 		local displayHpBar = (CurTime() % 0.7 > 0.35) and math.Round(math.Clamp(hp / maxHp, 0, 1) * 27) or 0
+		local displayPrevHpBar1 = (CurTime() % 0.7 > 0.35) and prevHpBar or 0
 		parsed = markup.Parse(string.format("<font=TVCD>%s <colour=255,255,0,255>%s</colour><colour=255,0,0,255>%s</colour></font>",
 				SlashCo.Language("HP"),
 				string.rep("█", displayHpBar),
-				string.rep("█", displayPrevHpBar)
+				string.rep("█", displayPrevHpBar1)
 		))
 	end
 
 	surface.SetDrawColor(0, 0, 128, 255)
 
-	local hpLength = markup.Parse("<font=TVCD>"..SlashCo.Language("HP").."</font>"):GetWidth()
+	local hpLength = markup.Parse("<font=TVCD>" .. SlashCo.Language("HP") .. "</font>"):GetWidth()
 
-	if not GetConVar("slashcohud_show_healthvalue"):GetBool() then
+	if not GetConVar("slashco_cl_show_healthvalue"):GetBool() then
 		surface.DrawRect(ScrW() * 0.025, ScrH() * 0.95 - 24, 376 + hpLength, 27)
 	else
 		local displayHp = math.Round(aHp)
@@ -312,6 +313,26 @@ hook.Add("HUDPaint", "SurvivorHUD", function()
 	end
 
 	parsed:Draw(ScrW() * 0.025 + 4, ScrH() * 0.95, TEXT_ALIGN_LEFT, TEXT_ALIGN_BOTTOM)
+end
+
+hook.Add("HUDPaint", "SurvivorHUD", function()
+	local ply = LocalPlayer()
+
+	if ply:Team() ~= TEAM_SURVIVOR then
+		return
+	end
+
+	local moveUp = drawItemDisplay(ply:GetItem("item"), ply:GetItem("item2") ~= "none")
+	drawItemDisplay(ply:GetItem("item2"), nil, moveUp)
+
+	local hitPos = LocalPlayer():GetShootPos()
+	gasFuelMeter(hitPos)
+	selectCrosshair(hitPos)
+
+	hpMeter()
+	slamIndicator()
+	drawObjectives()
+	showScreenMessage()
 end)
 
 hook.Add("PlayerButtonDown", "slashco_open_voice", function(ply, button)
@@ -328,7 +349,7 @@ hook.Add("Think", "Slasher_Chasing_Light", function()
 		local clone = ents.FindByClass("sc_crimclone")[s]
 		if clone:GetNWBool("MainRageClone") then
 			local tlight = DynamicLight(clone:EntIndex() + 1)
-			if (tlight) then
+			if tlight then
 				tlight.pos = clone:LocalToWorld(Vector(0, 0, 20))
 				tlight.r = 255
 				tlight.g = 0
@@ -345,7 +366,7 @@ hook.Add("Think", "Slasher_Chasing_Light", function()
 		local slasher = team.GetPlayers(TEAM_SLASHER)[s]
 		if slasher:GetNWBool("TrollgeStage2") then
 			local tlight = DynamicLight(slasher:EntIndex() + 1)
-			if (tlight) then
+			if tlight then
 				tlight.pos = slasher:LocalToWorld(Vector(0, 0, 20))
 				tlight.r = 255
 				tlight.g = 0
@@ -359,7 +380,7 @@ hook.Add("Think", "Slasher_Chasing_Light", function()
 
 		if slasher:GetNWBool("TylerFlash") then
 			local dlight = DynamicLight(slasher:EntIndex())
-			if (dlight) then
+			if dlight then
 				dlight.pos = slasher:LocalToWorld(Vector(0, 0, 20))
 				dlight.r = 255
 				dlight.g = 0
@@ -376,7 +397,7 @@ hook.Add("Think", "Slasher_Chasing_Light", function()
 		end
 
 		local dlight = DynamicLight(slasher:EntIndex())
-		if (dlight) then
+		if dlight then
 			dlight.pos = slasher:LocalToWorld(Vector(0, 0, 20))
 			dlight.r = 255
 			dlight.g = 0

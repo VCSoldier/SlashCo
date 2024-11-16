@@ -62,7 +62,7 @@ SlashCo.LangTable["offervote_duality_fail"] = "Die Abstimmung über die Opfergab
 SlashCo.LangTable["offer_made_already"] = "Eine Opfergabe wurde bereits gemacht."
 SlashCo.LangTable["offer_too_late"] = "Es zu spät für eine Opfergabe."
 SlashCo.LangTable["offer_not_ready"] = "Sie können keine Opfergabe machen wenn Sie bereit sind."
-SlashCo.LangTable["offer_cannot_ready"] = "Kann nicht als Slasher bereit gemacht werden, da Sie entweder eine Opfergabe gemacht oder einer solchen zugestimmt haben
+SlashCo.LangTable["offer_cannot_ready"] = "Kann nicht als Slasher bereit gemacht werden, da Sie entweder eine Opfergabe gemacht oder einer solchen zugestimmt haben"
 
 SlashCo.LangTable["lobby_full"] = "Die Lobby ist derzeit voll."
 SlashCo.LangTable["second_slasher"] = "Du wirst zum zweiten Slasher."
@@ -527,3 +527,53 @@ SlashCo.LangTable["Watcher_fullsurveillance"] = "VOLLE ÜBERWACHUNG"
 SlashCo.LangTable["Watcher_watched"] = "DU WIRST BEOBACHTET"
 SlashCo.LangTable["Watcher_observe"] = "ÜBERLEBENDE AM BEOBACHTEN. . ."
 SlashCo.LangTable["Watcher_stalktime"] = "STALK ZEIT: "
+
+--misc from maptools
+SlashCo.LangTable["spectators_can_ping"] = "Spektatoren können jetzt für Überlebende pingen."
+SlashCo.LangTable["unhide"] = "einblenden"
+SlashCo.LangTable["max pensives"] = "Zerstöre alle pensives"
+SlashCo.LangTable["max zanies"] = "Zerstöre alle zanies"
+SlashCo.LangTable["cant_fuel"] = "[SCHON VOLL]"
+SlashCo.LangTable["cant_power"] = "[BESITZT SCHON EINEN AKKU]"
+
+--main objectives
+SlashCo.LangTable["objective_generators"] = "VERSORGE %s GENERATOREN MIT STROM"
+SlashCo.LangTable["objective_generator"] = "VERSORGE 1 GENERATOR MIT STROM"
+SlashCo.LangTable["objective_heliwait"] = "WARTE AUF DEN HUBSCHRAUBER"
+SlashCo.LangTable["objective_helicopter"] = "STEIG IN DEN HUBSCHRAUBER"
+
+--optional objectives
+SlashCo.LangTable["objective_trashs"] = "(OPTIONAL) AUFRÄUME %s MÜLLTEILE" --item spawns
+SlashCo.LangTable["objective_trash"] = "(OPTIONAL) AUFRÄUME 1 MÜLLTEIL"
+SlashCo.LangTable["objective_mops"] = "(OPTIONAL) MOP %s VERSCHÜTTUNGEN" --gen spawns
+SlashCo.LangTable["objective_mop"] = "(OPTIONAL) MOP 1 VERSCHÜTTUNG"
+SlashCo.LangTable["objective_traps"] = "(OPTIONAL) ZURÜCKSETZE %s MAUSEFALLEN" --battery spawns
+SlashCo.LangTable["objective_trap"] = "(OPTIONAL) ZURÜCKSETZE 1 MAUSEFALLE"
+SlashCo.LangTable["objective_pages"] = "(OPTIONAL) SAMMEL %s DOKUMENTE" --gascan spawns
+SlashCo.LangTable["objective_page"] = "(OPTIONAL) SAMMEL 1 DOKUMENT"
+
+--points summary
+SlashCo.LangTable["point_summary"] = "- VERDIENENDE PUNKTE -"
+SlashCo.LangTable["point_total"] = "PUNKTE INSGESAMT: %s"
+SlashCo.LangTable["point_nil"] = "KEINE!"
+
+SlashCo.LangTable["points_slasher_kill"] = "[%s] TÖTEN" --slashers
+SlashCo.LangTable["points_slasher_demon"] = "[%s] VOLL GESÄTTIGT"
+
+SlashCo.LangTable["points_slasher_win"] = "[%s] ALLE MITARBEITER UMGEBRACHT" --slasher objective thwarting
+SlashCo.LangTable["points_slasher_escape"] = "[%s] MISSION ABGEBROCHEN"
+SlashCo.LangTable["points_slasher_perfect"] = "[%s] MISSION RUINIERT"
+
+SlashCo.LangTable["points_objective"] = "[%s] HAUPTZIEL ERREICHT" --objectives
+SlashCo.LangTable["points_optional"] = "[%s] OPTIONALES ZIEL ERREICHT"
+SlashCo.LangTable["points_escape"] = "[%s] ERFOLGREICHE MISSION FLUCHT"
+
+SlashCo.LangTable["points_all_survive"] = "[%s] ALLE MITARBEITER ÜBERLEBTEN" --survival status
+SlashCo.LangTable["points_last_survive"] = "[%s] LETZTER VERBLEIBENDER MITARBEITER"
+SlashCo.LangTable["points_left_behind"] = "[%s] ZURÜCKGELASSEN"
+SlashCo.LangTable["points_survive"] = "[%s] ÜBERLEBT"
+
+SlashCo.LangTable["points_item"] = "[%s] ITEM-RÜCKKAUF" --misc points
+SlashCo.LangTable["points_fast"] = "[%s] SCHNELL ERFOLGT"
+SlashCo.LangTable["points_benadryl"] = "[%s] BENADRYL"
+SlashCo.LangTable["points_working"] = "[%s] DEINE JOB TUN"

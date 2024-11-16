@@ -25,32 +25,27 @@ SLASHER.ProTip = "Tyler_tip"
 SLASHER.SpeedRating = "★★★★★"
 SLASHER.EyeRating = "★☆☆☆☆"
 SLASHER.DiffRating = "★★★★☆"
+SLASHER.CannotBeSpectated = true
 
 SLASHER.OnSpawn = function(slasher)
 	slasher.SlasherValue1 = 0
-	slasher:SetColor(Color(0, 0, 0, 0))
-	slasher:DrawShadow(false)
-	slasher:SetRenderMode(RENDERMODE_TRANSALPHA)
-	slasher:SetNoDraw(true)
+	slasher:SetVisible(false)
 end
 
-SLASHER.PickUpAttempt = function()
-	return false
+SLASHER.HideTime = function(slasher)
+	slasher.TylerTime = 25 + SlashCo.MapSize * 25 - slasher.SlasherValue4 * 3 - team.NumPlayers(TEAM_SURVIVOR)
 end
 
 SLASHER.OnTickBehaviour = function(slasher)
-	--local SO = SlashCo.CurRound.OfferingData.SO
-
 	local v1 = slasher.SlasherValue1 --State
 	local v2 = slasher.SlasherValue2 --Time Spent as Creator or destroyer
-	--local v3 = slasher.SlasherValue3 --Times Found
 	local v4 = slasher.SlasherValue4 --Destruction power
 	local v5 = slasher.SlasherValue5 --Destoyer Blink
 
 	local final_eyesight = SLASHER.Eyesight
 	local final_perception = SLASHER.Perception
 
-	local ms = SCInfo.Maps[game.GetMap()].SIZE
+	local ms = SlashCo.MapSize
 
 	if v1 == 0 then
 		--Specter
@@ -69,6 +64,17 @@ SLASHER.OnTickBehaviour = function(slasher)
 	elseif v1 == 1 then
 		--Creator
 
+		if SlashCo.BeaconArming then
+			slasher.SlasherValue1 = 0
+			slasher.SlasherValue2 = 0
+			slasher.SlasherValue5 = 0
+			slasher:SetVisible(false)
+			if slasher.TylerSongPickedID then
+				SlashCo.SendValue(nil, "tylSong", slasher, slasher.TylerSongPickedID, true)
+				slasher.TylerSongPickedID = nil
+			end
+		end
+
 		slasher:SetImpervious(false)
 		slasher:SetNWBool("TylerFlash", false)
 		slasher:SetSlowWalkSpeed(1)
@@ -82,23 +88,21 @@ SLASHER.OnTickBehaviour = function(slasher)
 		final_perception = 0.0
 
 		if not slasher:GetNWBool("TylerCreating") and slasher.TylerSongPickedID == nil then
-			slasher.TylerSongPickedID = math.random(1, 6)
-
-			PlayGlobalSound("slashco/slasher/tyler_song_" .. slasher.TylerSongPickedID .. ".mp3", 98, slasher,
-					0.8 - (slasher.SlasherValue3 * 0.12))
+			slasher.TylerSongPickedID = "slashco/slasher/tyler_song_" .. math.random(1, 6) .. ".mp3"
+			slasher:EmitSound(slasher.TylerSongPickedID, 1, 1, 0)
+			SlashCo.SendValue(nil, "tylSong", slasher, slasher.TylerSongPickedID, false, 0.8 - (slasher.SlasherValue3 * 0.12), true)
+			SLASHER.HideTime(slasher)
 		end
 
-		if v2 > 20 + ((ms * 35) - (v4 * 4)) then
-			--Time ran out
+		if not slasher.TylerTime then
+			SLASHER.HideTime(slasher)
+		end
 
-			local stop_song = slasher.TylerSongPickedID
-
-			slasher.SlasherValue1 = 2
-			slasher:StopSound("slashco/slasher/tyler_song_" .. stop_song .. ".mp3")
-			timer.Simple(0.1, function()
-				slasher:StopSound("slashco/slasher/tyler_song_" .. stop_song .. ".mp3")
-			end)
+		--Time ran out
+		if (SlashCo.CurRound.EscapeHelicopterSummoned and v2 > slasher.TylerTime / 2.5) or v2 > slasher.TylerTime then
+			SlashCo.SendValue(nil, "tylSong", slasher, slasher.TylerSongPickedID, true)
 			slasher.TylerSongPickedID = nil
+			slasher.SlasherValue1 = 2
 		end
 
 		for i = 1, team.NumPlayers(TEAM_SURVIVOR) do
@@ -106,15 +110,10 @@ SLASHER.OnTickBehaviour = function(slasher)
 
 			local surv = team.GetPlayers(TEAM_SURVIVOR)[i]
 
-			local stop_song = slasher.TylerSongPickedID
-
 			if not slasher:GetNWBool("TylerCreating") and surv:GetPos():Distance(slasher:GetPos()) < 400 and surv:GetEyeTrace().Entity == slasher then
 				slasher:SetNWBool("TylerCreating", true)
 				slasher.SlasherValue2 = 0
-				slasher:StopSound("slashco/slasher/tyler_song_" .. stop_song .. ".mp3")
-				timer.Simple(0.1, function()
-					slasher:StopSound("slashco/slasher/tyler_song_" .. stop_song .. ".mp3")
-				end)
+				SlashCo.SendValue(nil, "tylSong", slasher, slasher.TylerSongPickedID, true)
 				slasher.TylerSongPickedID = nil
 			end
 		end
@@ -144,10 +143,7 @@ SLASHER.OnTickBehaviour = function(slasher)
 				slasher.SlasherValue3 = slasher.SlasherValue3 + 1
 				slasher.SlasherValue5 = 0
 				slasher:Freeze(false)
-				slasher:SetColor(Color(0, 0, 0, 0))
-				slasher:DrawShadow(false)
-				slasher:SetRenderMode(RENDERMODE_TRANSALPHA)
-				slasher:SetNoDraw(true)
+				slasher:SetVisible(false)
 			end)
 		end
 
@@ -159,12 +155,7 @@ SLASHER.OnTickBehaviour = function(slasher)
 		slasher:Freeze(true)
 
 		if slasher.tyler_destroyer_entrance_antispam == nil then
-			PlayGlobalSound("slashco/slasher/tyler_alarm.wav", 110, slasher, 1)
-			if CLIENT then
-				slasher.TylerSong:Stop()
-				slasher.TylerSong = nil
-			end
-
+			SlashCo.SendValue(nil, "tylSong", slasher, "slashco/slasher/tyler_alarm.wav", false, 0.8)
 			slasher.tyler_destroyer_entrance_antispam = 0
 		end
 
@@ -177,13 +168,10 @@ SLASHER.OnTickBehaviour = function(slasher)
 		if slasher.tyler_destroyer_entrance_antispam < (12 - decay) then
 			slasher.tyler_destroyer_entrance_antispam = slasher.tyler_destroyer_entrance_antispam + FrameTime()
 		else
-			slasher:StopSound("slashco/slasher/tyler_alarm.wav")
-			timer.Simple(0.1, function()
-				slasher:StopSound("slashco/slasher/tyler_alarm.wav")
-			end) --idk man only works if i stop it twice shut up
+			SlashCo.SendValue(nil, "tylSong", slasher, "slashco/slasher/tyler_alarm.wav", true)
 
-			PlayGlobalSound("slashco/slasher/tyler_destroyer_theme.wav", 98, slasher, 1)
-			PlayGlobalSound("slashco/slasher/tyler_destroyer_whisper.wav", 101, slasher, 0.75)
+			slasher:PlayGlobalSound("slashco/slasher/tyler_destroyer_theme.wav", 140, nil, true)
+			slasher:PlayGlobalSound("slashco/slasher/tyler_destroyer_whisper.wav", 140, nil, true)
 
 			slasher:Freeze(false)
 			slasher.SlasherValue1 = 3
@@ -224,10 +212,7 @@ SLASHER.OnTickBehaviour = function(slasher)
 				slasher:StopSound("slashco/slasher/tyler_destroyer_whisper.wav")
 			end)
 
-			slasher:SetColor(Color(0, 0, 0, 0))
-			slasher:DrawShadow(false)
-			slasher:SetRenderMode(RENDERMODE_TRANSALPHA)
-			slasher:SetNoDraw(true)
+			slasher:SetVisible(false)
 			slasher:SetNWBool("TylerFlash", false)
 
 			slasher.SlasherValue4 = slasher.SlasherValue4 - 1
@@ -247,16 +232,10 @@ SLASHER.OnTickBehaviour = function(slasher)
 		end
 
 		if v5 <= 0.5 then
-			slasher:SetColor(Color(0, 0, 0, 0))
-			slasher:DrawShadow(false)
-			slasher:SetRenderMode(RENDERMODE_TRANSALPHA)
-			slasher:SetNoDraw(true)
+			slasher:SetVisible(false)
 			slasher:SetNWBool("TylerFlash", false)
 		else
-			slasher:SetColor(Color(255, 255, 255, 255))
-			slasher:DrawShadow(true)
-			slasher:SetRenderMode(RENDERMODE_TRANSCOLOR)
-			slasher:SetNoDraw(false)
+			slasher:SetVisible(true)
 			slasher:SetNWBool("TylerFlash", true)
 		end
 	end
@@ -318,6 +297,7 @@ SLASHER.OnPrimaryFire = function(slasher, target)
 			slasher:Freeze(false)
 			slasher.SlasherValue4 = slasher.SlasherValue4 + 1
 			slasher.SlasherValue1 = 0
+			slasher:SetVisible(false)
 
 			slasher:StopSound("slashco/slasher/tyler_destroyer_theme.wav")
 			slasher:StopSound("slashco/slasher/tyler_destroyer_whisper.wav")
@@ -330,10 +310,6 @@ SLASHER.OnPrimaryFire = function(slasher, target)
 				slasher:StopSound("slashco/slasher/tyler_destroyer_whisper.wav")
 			end)
 
-			slasher:SetColor(Color(0, 0, 0, 0))
-			slasher:DrawShadow(false)
-			slasher:SetRenderMode(RENDERMODE_TRANSALPHA)
-			slasher:SetNoDraw(true)
 			slasher:SetNWBool("TylerFlash", false)
 		end
 
@@ -343,12 +319,11 @@ SLASHER.OnPrimaryFire = function(slasher, target)
 
 			if target:IsPlayer() then
 				target:Freeze(false)
-				target:Kill()
+				target:TakeDamage(99999, slasher, slasher)
 			end
 
 			timer.Simple(FrameTime(), function()
 				if not IsValid(target) then
-					print("how")
 					return
 				end
 
@@ -393,11 +368,12 @@ SLASHER.OnMainAbilityFire = function(slasher)
 		return
 	end
 
+	if slasher:WaterLevel() > 1 then
+		return
+	end
+
 	slasher.SlasherValue1 = 1
-	slasher:SetColor(Color(255, 255, 255, 255))
-	slasher:DrawShadow(true)
-	slasher:SetRenderMode(RENDERMODE_TRANSCOLOR)
-	slasher:SetNoDraw(false)
+	slasher:SetVisible(true)
 end
 
 SLASHER.Animator = function(ply)
@@ -427,8 +403,22 @@ SLASHER.Animator = function(ply)
 	return ply.CalcIdeal, ply.CalcSeqOverride
 end
 
+SLASHER.Thirdperson = function(ply)
+	return ply:GetNWInt("TylerState") == 1
+end
+
 SLASHER.Footstep = function()
 	return true
+end
+
+SLASHER.CanBeSeen = function(ply)
+	if SERVER then
+		return
+	end
+
+	if ply:GetNWBool("SlashCoVisible", true) and ply:GetNWInt("TylerState") ~= 1 then
+		return true
+	end
 end
 
 local avatarTable = {
@@ -452,12 +442,23 @@ SLASHER.InitHud = function(_, hud)
 
 	hud.prevState = -1
 	hud.destroyEnabled = true
+	hud.prevWater = -1
 	function hud.AlsoThink()
 		local state = LocalPlayer():GetNWInt("TylerState")
+		if state == 0 then
+			local isInWater = LocalPlayer():WaterLevel() > 1
+			if hud.prevWater ~= isInWater then
+				if isInWater then
+					hud:SetControlEnabled("R", false)
+				else
+					hud:SetControlEnabled("R", true)
+				end
+			end
+		end
+
 		if state ~= hud.prevState then
 			if state == 0 then
 				hud:SetControlVisible("R", true)
-				hud:SetControlEnabled("R", true)
 				hud:SetControlText("R", "manifest")
 			elseif state == 1 then
 				hud:SetControlVisible("R", true)
@@ -481,6 +482,7 @@ SLASHER.InitHud = function(_, hud)
 			else
 				hud:SetCrosshairAlpha(0)
 				timer.Simple(1, function()
+					if not IsValid(hud) then return end
 					hud:SetCrosshairEnabled(false)
 				end)
 			end
@@ -489,7 +491,7 @@ SLASHER.InitHud = function(_, hud)
 		end
 
 		local target = LocalPlayer():GetEyeTrace().Entity
-		local class = target:GetClass()
+		local class = IsValid(target) and target:GetClass()
 		if IsValid(target) and target:IsPlayer() or (target.PingType == "ITEM" and class ~= "sc_beacon")
 				and class ~= "sc_battery" and not target:GetNWBool("SurvivorBeingJumpscared") and
 				LocalPlayer():GetPos():Distance(target:GetPos()) < SLASHER.KillDistance then
@@ -518,6 +520,11 @@ SLASHER.InitHud = function(_, hud)
 end
 
 if CLIENT then
+	local eyeball = Material("slashco/ui/particle/eyeball.png")
+	local drawIcon
+	local iconT = 0
+	local iconTL = 0
+
 	hook.Add("HUDPaint", SLASHER.Name .. "_Jumpscare", function()
 		if LocalPlayer():GetNWBool("SurvivorJumpscare_Tyler") == true then
 			if LocalPlayer().tyl_f == nil then
@@ -538,13 +545,24 @@ if CLIENT then
 			LocalPlayer().tyl_f = nil
 		end
 
+		if LocalPlayer():Team() == TEAM_SLASHER then
+			return
+		end
+
+		if drawIcon and LocalPlayer():Team() == TEAM_SURVIVOR then
+			iconTL = SlashCo.Dampen(7, iconTL, iconT)
+
+			surface.SetMaterial(eyeball)
+			surface.SetDrawColor(255, 255 - iconTL / 2, 255 - iconTL / 2, iconTL)
+			surface.DrawTexturedRect(ScrW() / 32, ScrW() / 32, ScrW() / 16, ScrW() / 16)
+		end
+
 		if LocalPlayer():GetNWBool("DisplayTylerTheDestroyerEffects") == true then
 			local Overlay = Material("slashco/ui/overlays/tyler_static")
 			local DestroyerFace = Material("slashco/ui/overlays/tyler_destroyer_face")
 
-			Overlay:SetFloat("$alpha", math.Rand(0.2, 0.23))
-
-			DestroyerFace:SetFloat("$alpha", math.Rand(0, 0.1))
+			Overlay:SetFloat("$alpha", math.Rand(0.1, 0.12))
+			DestroyerFace:SetFloat("$alpha", math.Rand(0, 0.07))
 
 			surface.SetDrawColor(255, 255, 255, 255)
 			surface.SetMaterial(Overlay)
@@ -553,6 +571,77 @@ if CLIENT then
 			surface.SetDrawColor(255, 255, 255, 255)
 			surface.SetMaterial(DestroyerFace)
 			surface.DrawTexturedRect(0, 0, ScrW(), ScrH())
+		end
+	end)
+
+	SlashCo.TylerSongs = SlashCo.TylerSongs or {}
+	hook.Add("scValue_tylSong", "SlashCoTylerSong", function(slasher, song, stop, maxVol, shouldDrawIcon)
+		if stop then
+			if shouldDrawIcon or drawIcon == song then
+				drawIcon = nil
+				iconT = 0
+				iconTL = 0
+			end
+
+			if not SlashCo.TylerSongs[song] then
+				return
+			end
+
+			SlashCo.TylerSongs[song].snd:Stop()
+			SlashCo.TylerSongs[song].shouldBePlaying = nil
+			return
+		end
+
+		local snd
+		if SlashCo.TylerSongs[song] then
+			snd = SlashCo.TylerSongs[song].snd
+		else
+			snd = CreateSound(LocalPlayer(), song)
+		end
+
+		if shouldDrawIcon then
+			drawIcon = song
+			iconT = 0
+			iconTL = 0
+		end
+
+		snd:Stop()
+		snd:Play()
+		snd:ChangeVolume(0.02)
+
+		SlashCo.TylerSongs[song] = { ent = slasher, snd = snd, shouldBePlaying = true, maxVol = maxVol or 1 }
+	end)
+
+	timer.Create("TylerSongs", 0.5, 0, function()
+		for k, v in pairs(SlashCo.TylerSongs) do
+			if not IsValid(v.ent) then
+				if drawIcon == k then
+					drawIcon = nil
+					iconT = 0
+					iconTL = 0
+				end
+
+				v.snd:Stop()
+				v.shouldBePlaying = false
+				continue
+			end
+
+			if not v.snd:IsPlaying() then
+				if not v.shouldBePlaying then
+					continue
+				end
+
+				v.snd:Stop()
+				v.snd:Play()
+			end
+
+			local vol = math.max(v.maxVol - EyePos():Distance(v.ent:GetPos()) * 0.0002 * (0.5 + 0.5 / GetGlobal2Int("SlashCoMapSize", 1)), 0.02)
+
+			if drawIcon == k then
+				iconT = vol * 255
+			end
+
+			v.snd:ChangeVolume(vol, 0.4)
 		end
 	end)
 end

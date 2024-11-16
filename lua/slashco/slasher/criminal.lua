@@ -36,14 +36,7 @@ SLASHER.OnSpawn = function(slasher)
 	clone:Spawn()
 	clone:Activate()
 
-	slasher:SetColor(Color(0, 0, 0, 0))
-	slasher:DrawShadow(false)
-	slasher:SetRenderMode(RENDERMODE_TRANSALPHA)
-	slasher:SetNoDraw(true)
-end
-
-SLASHER.PickUpAttempt = function(ply)
-	return false
+	slasher:SetVisible(false)
 end
 
 SLASHER.OnTickBehaviour = function(slasher)
@@ -56,8 +49,13 @@ SLASHER.OnTickBehaviour = function(slasher)
 
 	if slasher:GetVelocity():Length() > 5 then
 		slasher:SetNWBool("CanKill", false)
-	else
-		slasher:SetNWBool("CanKill", true)
+		timer.Remove("CriminalStandStill_" .. slasher:UserID())
+	elseif not timer.Exists("CriminalStandStill_" .. slasher:UserID()) then
+		timer.Create("CriminalStandStill_" .. slasher:UserID(), 0.7, 1, function()
+			if IsValid(slasher) then
+				slasher:SetNWBool("CanKill", true)
+			end
+		end)
 	end
 
 	if slasher:GetNWBool("CriminalCloning") then
@@ -134,7 +132,7 @@ SLASHER.OnSecondaryFire = function(slasher)
 	end
 end
 
-SLASHER.OnMainAbilityFire = function(slasher)
+SLASHER.OnMainAbilityFire = function()
 end
 
 SLASHER.OnSpecialAbilityFire = function(slasher)
@@ -199,7 +197,7 @@ SLASHER.InitHud = function(_, hud)
 
 	hud:ChaseAndKill(true)
 	hud:AddControl("RMB", "summon clones", Material("slashco/ui/icons/slasher/s_12_a1"))
-	hud:TieControlText("RMB", "CriminalCloning", "unsummon clones", "summon clones")
+	hud:TieControlText("RMB", "CriminalCloning", "unsummon clones", "summon clones", nil)
 	hud:AddControl("F", "rage", Material("slashco/ui/icons/slasher/s_12_1"))
 	hud:SetControlVisible("F", false)
 
@@ -208,7 +206,7 @@ SLASHER.InitHud = function(_, hud)
 		local rage = LocalPlayer():GetNWBool("CriminalRage")
 		if rage ~= hud.prevRage then
 			hud:SetAvatar(rage and "rage" or "default")
-			hud:SetControlActive(not rage)
+			hud:SetControlEnabled("F", not rage)
 			hud.prevRage = rage
 		end
 

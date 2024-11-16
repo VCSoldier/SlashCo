@@ -27,14 +27,10 @@ SLASHER.EyeRating = "★★★☆☆"
 SLASHER.DiffRating = "★★★★☆"
 
 SLASHER.OnSpawn = function(slasher)
-	SlashCo.CreateItem("sc_dogg", SlashCo.TraceHullLocator(), Angle(0, 0, 0))
+	SlashCo.CreateItem("sc_dogg", SlashCo.RandomPosLocator(), Angle(0, 0, 0))
 	slasher.soundon = 0
 	slasher:SetNWBool("CanKill", true)
 	slasher:SetNWBool("CanChase", true)
-end
-
-SLASHER.PickUpAttempt = function()
-	return false
 end
 
 SLASHER.OnTickBehaviour = function(slasher)
@@ -109,7 +105,7 @@ SLASHER.OnTickBehaviour = function(slasher)
 				slasher:SetBodygroup(1, 0)
 				slasher:Freeze(false)
 
-				SlashCo.CreateItem("sc_dogg", SlashCo.TraceHullLocator(), Angle(0, 0, 0))
+				SlashCo.CreateItem("sc_dogg", SlashCo.RandomPosLocator(), Angle(0, 0, 0))
 
 				slasher:StopSound("slashco/slasher/leuonard_grunt_loop.wav")
 				slasher:EmitSound("slashco/slasher/leuonard_grunt_finish.mp3")
@@ -157,9 +153,9 @@ SLASHER.OnTickBehaviour = function(slasher)
 		end
 
 		if slasher.soundon > 0 then
-			PlayGlobalSound("slashco/slasher/leuonard_yell7.mp3", 98, slasher, 1)
-			PlayGlobalSound("slashco/slasher/leuonard_full_close.wav", 80, slasher, 1)
-			PlayGlobalSound("slashco/slasher/leuonard_full_far.wav", 125, slasher, 1)
+			slasher:PlayGlobalSound("slashco/slasher/leuonard_yell7.mp3", 100)
+			slasher:PlayGlobalSound("slashco/slasher/leuonard_full_close.wav", 80)
+			slasher:PlayGlobalSound("slashco/slasher/leuonard_full_far.wav", 125)
 			slasher.soundon = 0
 		end
 
@@ -207,7 +203,11 @@ SLASHER.OnTickBehaviour = function(slasher)
 							return
 						end
 
-						ent:Kill()
+						if IsValid(slasher) then
+							ent:TakeDamage(99999, slasher, slasher)
+						else
+							ent:Kill()
+						end
 					end)
 
 					timer.Simple(0.25, function()
@@ -286,8 +286,8 @@ SLASHER.InitHud = function(_, hud)
 	hud:SetTitle("Leuonard")
 
 	hud:ChaseAndKill()
-	hud:TieControlVisible("LMB", "LeuonardFullRoid", true, false, false)
-	hud:TieControlVisible("RMB", "LeuonardFullRoid", true, false, false)
+	hud:TieControlVisible("LMB", "LeuonardFullRoid", true, false)
+	hud:TieControlVisible("RMB", "LeuonardFullRoid", true, false)
 
 	hud:AddMeter("r**e")
 	hud:TieMeterInt("r**e", "LeuonardRoid")

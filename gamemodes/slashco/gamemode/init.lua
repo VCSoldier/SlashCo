@@ -21,9 +21,17 @@ AddCSLuaFile("ui/slasher_stock/cl_slasher_control.lua")
 AddCSLuaFile("ui/slasher_stock/cl_slasher_meter.lua")
 AddCSLuaFile("ui/slasher_stock/sh_slasher_hudfunctions.lua")
 AddCSLuaFile("ui/cl_projector.lua")
+AddCSLuaFile("cl_limitedzone.lua")
+AddCSLuaFile("sh_bhop.lua")
+AddCSLuaFile("ui/cl_pings.lua")
+AddCSLuaFile("sh_roundpoints.lua")
+AddCSLuaFile("sh_canbeseen.lua")
+AddCSLuaFile("cl_thirdperson.lua")
 
 include("sv_globals.lua")
 include("sh_shared.lua")
+include("sv_spawning.lua")
+include("sv_teleporting.lua")
 include("items/items_init.lua")
 include("slasher/slasher_init.lua")
 include("sv_player.lua")
@@ -41,15 +49,19 @@ include("ui/slasher_stock/sh_slasher_hudfunctions.lua")
 include("sh_values.lua")
 include("sh_doors.lua")
 include("sh_chattext.lua")
+include("sh_bhop.lua")
+include("sv_ghostping.lua")
+include("sv_objectives.lua")
+include("sh_roundpoints.lua")
+include("sh_canbeseen.lua")
 
 local SlashCo = SlashCo or {}
-local SlashCoItems = SlashCoItems or {}
 
 --[[
 
 SlashCo Credits:
 
-Coding: Octo, Manti, Text
+Coding: Octo, Manti, textstack
 
 Assets: Manti, warman, Darken, Vee
 
@@ -59,10 +71,8 @@ Extra credits: undo, Jim, DarkGrey
 
 --local roundOverToggle = SlashCo.CurRound.roundOverToggle
 
-CreateConVar("slashco_map_default", 0, FCVAR_NONE, "Allow the gamemode to access all conifgured maps.", 0, 1)
-CreateConVar("slashco_force_difficulty", 0, FCVAR_NONE,
-		"Have the gamemode force a certan difficulty.(0 - random, 1 - EASY, 2 - NOVICE, 3 - INTERMEDIATE, 4 - HARD)", 0,
-		4)
+CreateConVar("slashco_force_difficulty", -1, FCVAR_NONE,
+		"Have the gamemode force a certan difficulty. (-1 - random, 0 - EASY, 1 - NOVICE, 2 - INTERMEDIATE, 3 - HARD)", -1, 3)
 
 hook.Add("CanExitVehicle", "PlayerMotion", function(veh, ply)
 	if ply:Team() == TEAM_SURVIVOR then
@@ -71,18 +81,7 @@ hook.Add("CanExitVehicle", "PlayerMotion", function(veh, ply)
 end)
 
 --Initialize global variable to hold functions.
-if not SlashCo then
-	SlashCo = {}
-end
-
-SlashCo.SpawnableItems = {}
-
-for _, p in SortedPairs(SlashCoItems) do
-	if p.IsSpawnable then
-		table.insert(SlashCo.SpawnableItems, p.EntClass)
-		--SlashCo.SpawnableItems[1 + #SlashCo.SpawnableItems] = p.EntClass
-	end
-end
+SlashCo = SlashCo or {}
 
 function GM:Initialize()
 	--If there is no data folder then make one.
@@ -93,7 +92,6 @@ function GM:Initialize()
 		--Return to the lobby if no game is in progress and we just loaded in.
 		if GAMEMODE.State ~= GAMEMODE.States.IN_GAME and game.GetMap() ~= "sc_lobby" then
 			SlashCo.GoToLobby()
-			--print("tried to go to lobby (bad state)")
 			GAMEMODE.State = GAMEMODE.States.LOBBY
 		else
 			GAMEMODE.State = GAMEMODE.States.IN_GAME
@@ -119,10 +117,15 @@ end
 
 hook.Add("AllowPlayerPickup", "PickupNotSpectator", function(ply, ent)
 	if ply:Team() == TEAM_SLASHER then
-		return ply:SlasherFunction("PickUpAttempt", ent)
+		local override = ply:SlasherFunction("PickUpAttempt", ent)
+		if override ~= nil then
+			return override
+		end
+
+		return false
 	end
 
-	return (ply:Team() ~= TEAM_SPECTATOR)
+	return ply:Team() ~= TEAM_SPECTATOR
 end)
 
 --lag-compensated eye trace for use in slasher functions
@@ -211,6 +214,7 @@ local function lobbyButtons(ply, button)
 		end
 	end
 end
+
 local function spectatorButtons(ply, button)
 	if button == 107 then
 		--Spectator Left Clicks
@@ -227,11 +231,20 @@ local function spectatorButtons(ply, button)
 			--Spectate the player aimed at
 			local ent = ply:GetEyeTrace().Entity
 
-			if ent:IsPlayer() then
-				--Only allow spectators to spectate other players.
-				ply:SpectateEntity(ent)
-				ply:SetObserverMode(OBS_MODE_CHASE)
+			if not IsValid(ent) then
+				return
 			end
+
+			if ent:IsPlayer() then
+				if ent:Team() == TEAM_SLASHER and ent:SlasherValue("CannotBeSpectated") then
+					return
+				end
+			elseif not ent.IsSelectable and not ent.SurvivorSteamID then
+				return
+			end
+
+			ply:SpectateEntity(ent)
+			ply:SetObserverMode(OBS_MODE_CHASE)
 		end
 
 		return
@@ -241,23 +254,26 @@ local function spectatorButtons(ply, button)
 		--Spectator Right Clicks
 		if IsValid(ply:GetObserverTarget()) and ply:GetObserverMode() ~= OBS_MODE_ROAMING then
 			local ent = ply:GetObserverTarget()
-			for k, v in ipairs(team.GetPlayers(TEAM_SURVIVOR)) do
-				if ply:GetObserverTarget() == v then
-					if (k + 1) >= team.NumPlayers(TEAM_SURVIVOR) then
-						ent = team.GetPlayers(TEAM_SURVIVOR)[1]
-					else
-						ent = team.GetPlayers(TEAM_SURVIVOR)[k + 1]
-					end
+			local targets = SlashCo.GetSpectatableSet()
+			for k, v in ipairs(targets) do
+				if ply:GetObserverTarget() ~= v then
+					continue
+				end
+
+				if (k + 1) > #targets then
+					ent = targets[1]
+				else
+					ent = targets[k + 1]
 				end
 			end
 
-			if ent:IsPlayer() then
+			if IsValid(ent) then
 				ply:SpectateEntity(ent)
-				--ply:SetObserverMode( OBS_MODE_CHASE )
 			end
 		else
-			if IsValid(team.GetPlayers(TEAM_SURVIVOR)[1]) then
-				ply:SpectateEntity(team.GetPlayers(TEAM_SURVIVOR)[1])
+			local first = SlashCo.GetSpectatableSet()[1]
+			if IsValid(first) then
+				ply:SpectateEntity(first)
 				ply:SetObserverMode(OBS_MODE_CHASE)
 			end
 		end
@@ -276,6 +292,7 @@ local function spectatorButtons(ply, button)
 		return
 	end
 end
+
 local function slasherButtons(ply, button)
 	if button == 107 then
 		ply:SlasherFunction("OnPrimaryFire", lagTrace(ply))
@@ -294,6 +311,20 @@ local function slasherButtons(ply, button)
 		return
 	end --Special
 end
+
+function SlashCo.GetSpectatableSet()
+	local targets = team.GetPlayers(TEAM_SURVIVOR)
+	table.Add(targets, SlashCo.DeadBodies)
+
+	for _, v in ipairs(team.GetPlayers(TEAM_SLASHER)) do
+		if not v:SlasherValue("CannotBeSpectated") then
+			table.insert(targets, v)
+		end
+	end
+
+	return targets
+end
+
 function GM:PlayerButtonDown(ply, button)
 	if game.GetMap() == "sc_lobby" then
 		lobbyButtons(ply, button)
@@ -315,11 +346,10 @@ function GM:PlayerDeathSound()
 end
 
 function GM:PlayerShouldTakeDamage(ply, attacker)
-	if attacker:IsPlayer() or attacker:IsNPC() then
-		if attacker:Team() == ply:Team() then
-			return false
-		end
+	if (attacker:IsPlayer() or attacker:IsNPC()) and attacker:Team() == ply:Team() then
+		return false
 	end
+
 	return ply:Team() == TEAM_SURVIVOR
 end
 
@@ -327,31 +357,21 @@ hook.Add("OnPlayerChangedTeam", "octoSlashCoOnPlayerChangedTeam", function(ply, 
 	-- Here's an immediate respawn thing by default. If you want to
 	-- re-create something more like CS or some shit you could probably
 	-- change to a spectator or something while dead.
-	if (newteam == TEAM_SPECTATOR) then
-
+	if newteam == TEAM_SPECTATOR then
 		-- If we changed to spectator mode, respawn where we are
 		local Pos = ply:EyePos()
 		ply:Spawn()
 		ply:SetPos(Pos)
-
-	elseif (oldteam == TEAM_SPECTATOR) then
-
+	elseif oldteam == TEAM_SPECTATOR then
 		-- If we're changing from spectator, join the game
 		ply:Spawn()
-
-	else
-
-		-- If we're straight up changing teams just hang
-		-- around until we're ready to respawn onto the
-		-- team that we chose
-
 	end
 
-	--PrintMessage( HUD_PRINTTALK, Format( "%s joined '%s'", ply:Nick(), team.GetName( newteam ) ) )
-
+	if g_SlashCoDebug then
+		PrintMessage(HUD_PRINTTALK, Format("%s joined '%s'", ply:Nick(), team.GetName(newteam)))
+	end
 
 	--Ready Message
-
 	SlashCo.BroadcastGlobalData()
 end)
 
@@ -364,7 +384,6 @@ hook.Add("InitPostEntity", "octoSlashCoInitPostEntity", function()
 
 		SlashCo.LoadCurRoundData()
 		SlashCo.CurRound.GameProgress = -1
-
 	end
 end)
 
@@ -408,17 +427,16 @@ local Think = function()
 		end
 
 		local allRunning = true
-		if runningCount < 2 then
+		if runningCount < GetGlobal2Int("SlashCoGeneratorsNeeded", SlashCo.GensNeeded) then
 			allRunning = false
 		end
 
 		--//drainage//--
-
 		if SlashCo.CurRound.OfferingData.CurrentOffering == 3 then
-
 			local totalCansRemaining = 0
+			local gasPerGen = GetGlobal2Int("SlashCoGasCansPerGenerator", SlashCo.GasPerGen)
 			for _, v in ipairs(gens) do
-				totalCansRemaining = totalCansRemaining + (v.CansRemaining or SlashCo.GasCansPerGenerator)
+				totalCansRemaining = totalCansRemaining + (v.CansRemaining or gasPerGen)
 			end
 
 			if #ents.FindByClass("sc_gascan") <= totalCansRemaining then
@@ -427,66 +445,47 @@ local Think = function()
 
 			if engine.TickCount() % math.floor(240 / engine.TickInterval()) == 0 then
 				local random = math.random(#gens)
-				gens[random].CansRemaining = math.Clamp((gens[random].CansRemaining or SlashCo.GasCansPerGenerator) + 1,
-						0, SlashCo.GasCansPerGenerator)
+				gens[random]:ChangeCanProgress(-1)
+				--gens[random].CansRemaining = math.Clamp((gens[random].CansRemaining or gasPerGen) + 1, 0, gasPerGen)
 			end
-
 		end
 
 		--//helicopters//--
-
 		if allRunning and not SlashCo.CurRound.EscapeHelicopterSummoned then
+			--(SPAWN HELICOPTER)
 
+			local failed = SlashCo.SummonEscapeHelicopter()
+			if not failed then
+				local settingsEnt = SlashCo.SettingsEntity()
+				if settingsEnt then
+					settingsEnt:TriggerOutput("OnAllGeneratorsComplete", settingsEnt)
+				end
+
+				SlashCo.CurRound.DistressBeaconUsed = false
+			end
+		end
+
+		--//duality condition//--
+		if SlashCo.CurRound.OfferingData.CurrentOffering == 4 and runningCount > 0 and not SlashCo.CurRound.EscapeHelicopterSummoned then
 			--(SPAWN HELICOPTER)
 
 			local failed = SlashCo.SummonEscapeHelicopter()
 
 			if not failed then
-				SlashCo.CurRound.DistressBeaconUsed = false
-			end
-
-		end
-
-		--//duality condition//--
-		if SlashCo.CurRound.OfferingData.CurrentOffering == 4 then
-
-			if runningCount > 0 and not SlashCo.CurRound.EscapeHelicopterSummoned then
-
-				--(SPAWN HELICOPTER)
-
-				local failed = SlashCo.SummonEscapeHelicopter()
-
-				if not failed then
-					SlashCo.CurRound.DistressBeaconUsed = false
+				local settingsEnt = SlashCo.SettingsEntity()
+				if settingsEnt then
+					settingsEnt:TriggerOutput("OnAllGeneratorsComplete", settingsEnt)
 				end
 
+				SlashCo.CurRound.DistressBeaconUsed = false
 			end
-
 		end
 
 		--Go back to lobby if everyone dies.
 		if team.NumPlayers(TEAM_SURVIVOR) <= 0 and SlashCo.CurRound.roundOverToggle then
-
 			SlashCo.EndRound()
 
 			SlashCo.CurRound.roundOverToggle = false
-		end
-
-		--Benadryl
-		for _, plr in ipairs(player.GetAll()) do
-
-			if plr:Team() ~= TEAM_SURVIVOR then
-
-				if plr:GetNWBool("SurvivorBenadryl") then
-					plr:SetNWBool("SurvivorBenadryl", false)
-				end
-
-				if plr:GetNWBool("SurvivorBenadrylFull") then
-					plr:SetNWBool("SurvivorBenadrylFull", false)
-				end
-
-			end
-
 		end
 	end
 end
@@ -497,13 +496,27 @@ hook.Add("PostGamemodeLoaded", "octoSlashCoPostGamemodeLoaded", function()
 	end)
 end)
 
-hook.Add("PlayerInitialSpawn", "octoSlashCoPlayerInitialSpawn", function(ply, _)
+gameevent.Listen("player_activate")
+hook.Add("player_activate", "slashCoPreItem", function(data)
+	local ply = Player(data.userid)
+
+	if SlashCo.CurRound and SlashCo.CurRound.SlasherData and SlashCo.CurRound.SlasherData.AllSurvivors then
+		local id = ply:SteamID64()
+		for _, v in ipairs(SlashCo.CurRound.SlasherData.AllSurvivors) do
+			if v.id == id then
+				SlashCo.SendValue(ply, "preItem", v.Item)
+			end
+		end
+	end
+end)
+
+hook.Add("PlayerInitialSpawn", "octoSlashCoPlayerInitialSpawn", function(ply)
 	ply:SetTeam(TEAM_SPECTATOR)
 	ply:Spawn()
 
 	local pid = ply:SteamID64()
 	local data = {}
-	
+
 	--Don't load playerdata if it's already loaded
 	if SlashCo.PlayerData[ply:SteamID64()] ~= nil then
 		return
@@ -535,7 +548,6 @@ hook.Add("PlayerInitialSpawn", "octoSlashCoPlayerInitialSpawn", function(ply, _)
 	SlashCoDatabase.OnPlayerJoined(pid)
 
 	SlashCo.AwaitExpectedPlayers()
-
 	SlashCo.BroadcastGlobalData()
 
 	timer.Simple(2, function()
@@ -551,8 +563,6 @@ hook.Add("PlayerChangedTeam", "octoSlashCoPlayerChangedTeam", function(ply, old,
 	if CLIENT then
 		return
 	end
-
-	local pid = ply:SteamID64()
 
 	SlashCo.BroadcastMasterDatabaseForClient(ply)
 
@@ -580,6 +590,8 @@ hook.Add("PlayerChangedTeam", "octoSlashCoPlayerChangedTeam", function(ply, old,
 		net.Broadcast()
 	end
 end)
+
+SlashCo.DeadBodies = SlashCo.DeadBodies or {}
 
 function GM:PlayerDeath(victim)
 	if not IsValid(victim) then
@@ -618,11 +630,29 @@ function GM:PlayerDeath(victim)
 			ragdoll:SetModel("models/player/corpse1.mdl")
 		end
 
+		ragdoll:SetCollisionGroup(COLLISION_GROUP_PASSABLE_DOOR)
 		ragdoll:SetPos(victim:GetPos())
 		ragdoll:SetNoDraw(false)
 		ragdoll:Spawn()
+		ragdoll:Activate()
 
-		local ang_offset = 0
+		local vel = victim:GetVelocity()
+		for i = 0, ragdoll:GetPhysicsObjectCount() - 1 do
+			local phys = ragdoll:GetPhysicsObjectNum(i)
+			if not IsValid(phys) then continue end
+
+			local boneid = ragdoll:TranslatePhysBoneToBone(i)
+			if boneid < 0 then continue end
+
+			local matrix = victim:GetBoneMatrix(boneid)
+			if not matrix then continue end
+
+			phys:SetPos(matrix:GetTranslation())
+			phys:SetAngles(matrix:GetAngles())
+			phys:AddVelocity(vel)
+		end
+
+		table.insert(SlashCo.DeadBodies, ragdoll)
 
 		if victim:GetNWBool("SurvivorDecapitate") then
 			ragdoll:ManipulateBoneScale(ragdoll:LookupBone("ValveBiped.Bip01_Head1"), Vector(0, 0, 0))
@@ -643,32 +673,27 @@ function GM:PlayerDeath(victim)
 			ang_offset = 180
 		end
 
-		ragdoll:SetAngles(Angle(0, victim:EyeAngles()[2] + ang_offset, 0))
-		local physCount = ragdoll:GetPhysicsObjectCount()
-
-		for i = 0, (physCount - 1) do
-			local PhysBone = ragdoll:GetPhysicsObjectNum(i)
-
-			if PhysBone:IsValid() then
-				PhysBone:SetVelocity(victim:GetVelocity() * 2)
-				PhysBone:AddAngleVelocity(-PhysBone:GetAngleVelocity())
-
-				ragdoll:TranslatePhysBoneToBone(i) --local ragbone =
-				for b = 1, victim:GetBoneCount() do
-					local plybone = victim:TranslateBoneToPhysBone(b)
-
-					if plybone == PhysBone then
-						PhysBone:SetAngles(PhysBone:GetAngles(), plybone:GetAngles())
-					end
-				end
-			end
+		if team.NumPlayers(TEAM_SURVIVOR) == 1 and #SlashCo.CurRound.SlasherData.AllSurvivors > 1 then
+			team.GetPlayers(TEAM_SURVIVOR)[1]:SetPoints("last_survive")
 		end
 
 		--...............
 
 		victim:SetTeam(TEAM_SPECTATOR)
-		victim:Spawn()
-		victim:SetPos(ragdoll:GetPos())
+		timer.Simple(0, function()
+			if IsValid(victim) and IsValid(ragdoll) then
+				victim:Spawn()
+				victim:SetPos(ragdoll:GetPos())
+				victim:SpectateEntity(ragdoll)
+				victim:SetObserverMode(OBS_MODE_CHASE)
+			end
+		end)
+	end
+end
+
+function GM:PlayerSpray(ply)
+	if ply:Team() == TEAM_SPECTATOR then
+		return true
 	end
 end
 

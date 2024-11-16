@@ -58,6 +58,10 @@ function sign(number)
 end
 
 if SERVER then
+	function ENT:UpdateTransmitState()
+		return TRANSMIT_ALWAYS
+	end
+
 	function ENT:Use(activator)
 		local availabilityHeli = false
 		local userEnteredAlready
@@ -80,9 +84,9 @@ if SERVER then
 			activator:SetNWBool("DynamicFlashlight", false)
 		end
 
-		for _, v in ipairs(SatPlayers) do
-			--local id = activator:SteamID64()
+		activator.CantBuy = true
 
+		for _, v in ipairs(SatPlayers) do
 			if v == activator then
 				--If the steamid in this entry matches the one we're looking for, that means the player is already in the copter.
 				userEnteredAlready = true
@@ -157,7 +161,7 @@ if SERVER then
 
 		-- Visibles
 		vehicle:DrawShadow(false)
-		vehicle:SetColor(Color(0, 0, 0, 0))
+		vehicle:SetColor(color_transparent)
 		vehicle:SetRenderMode(RENDERMODE_TRANSALPHA)
 		vehicle:SetNoDraw(true)
 		vehicle.VehicleName = "Airboat Seat"
@@ -245,6 +249,9 @@ if SERVER then
 		if team.NumPlayers(TEAM_SURVIVOR) > 0 and plyCount == team.NumPlayers(TEAM_SURVIVOR)
 				and GAMEMODE.State == GAMEMODE.States.IN_GAME and self.switch_full == nil then
 
+			SlashCo.UpdateObjective("helicopter", SlashCo.ObjStatus.COMPLETE)
+			SlashCo.SendObjectives()
+
 			SlashCo.SurvivorWinFinish()
 			SlashCo.HelicopterTakeOff()
 			self.switch_full = true
@@ -265,6 +272,9 @@ if SERVER then
 				if self.switch_full == true then
 					return true
 				end
+
+				SlashCo.UpdateObjective("helicopter", SlashCo.ObjStatus.COMPLETE)
+				SlashCo.SendObjectives()
 
 				SlashCo.HelicopterTakeOff()
 				SlashCo.SurvivorWinFinish()
@@ -287,6 +297,9 @@ if SERVER then
 					return true
 				end
 
+				SlashCo.UpdateObjective("helicopter", SlashCo.ObjStatus.COMPLETE)
+				SlashCo.SendObjectives()
+
 				SlashCo.HelicopterTakeOff()
 				SlashCo.SurvivorWinFinish()
 			end)
@@ -294,13 +307,7 @@ if SERVER then
 
 		return true -- Apply NextThink call
 	end
-end
-
-function ENT:UpdateTransmitState()
-	return TRANSMIT_ALWAYS
-end
-
-if CLIENT then
+else
 	function ENT:Draw()
 		self:DrawModel()
 	end

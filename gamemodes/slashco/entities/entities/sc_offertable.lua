@@ -12,8 +12,12 @@ ENT.Purpose = "A table for offerings."
 ENT.Instructions = ""
 ENT.PingType = "OFFERING TABLE"
 
-function ENT:Initialize()
-    if SERVER then
+if SERVER then
+    function ENT:UpdateTransmitState()
+        return TRANSMIT_ALWAYS
+    end
+
+    function ENT:Initialize()
         self:SetModel("models/slashco/other/lobby/offertable.mdl")
         self:SetSolid(SOLID_VPHYSICS)
         self:PhysicsInit(SOLID_VPHYSICS)
@@ -30,23 +34,19 @@ function ENT:Initialize()
         offer:SetAngles(self:LocalToWorldAngles(Angle(0, 0, 0)))
         offer:SetParent(self)
     end
-end
 
-function ENT:Think()
-    if SERVER then
+    function ENT:Think()
         if SlashCo.LobbyData.Offering > 0 then
             self.Offer:SetModel("models/slashco/other/offerings/o_" .. SlashCo.LobbyData.Offering .. ".mdl")
             self.Offer:SetColor(Color(255, 255, 255, 255))
         else
             self.Offer:SetModel("")
-            self.Offer:SetColor(Color(0, 0, 0, 0))
+            self.Offer:SetColor(color_transparent)
             self.Offer:SetRenderMode(RENDERMODE_TRANSCOLOR)
         end
     end
-end
 
-function ENT:Use(activator)
-    if SERVER then
+    function ENT:Use(activator)
         if activator:Team() == TEAM_LOBBY then
             if #SlashCo.LobbyData.Offerors > 0 or SlashCo.LobbyData.Offering ~= 0 then
                 activator:ChatText("offer_made_already")
@@ -66,13 +66,7 @@ function ENT:Use(activator)
             end
         end
     end
-end
-
-function ENT:UpdateTransmitState()
-    return TRANSMIT_ALWAYS
-end
-
-if CLIENT then
+else
     function ENT:Draw()
         self:DrawModel()
     end

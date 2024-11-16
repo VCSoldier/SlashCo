@@ -1,3 +1,51 @@
+local function showPointSummary(cur)
+	local stuff = {}
+
+	local pKeys = LocalPlayer():GetPointsKeys()
+	if table.IsEmpty(pKeys) then
+		table.insert(stuff, "point_nil")
+	else
+		table.insert(stuff, "point_total")
+		table.Add(stuff, pKeys)
+	end
+
+	table.insert(stuff, "point_summary")
+
+	local totalEntries = #stuff
+
+	local shift = 0
+	for k, v in ipairs(stuff) do
+		if CurTime() - cur < 2 + (totalEntries - k) * 0.35 then
+			continue
+		end
+
+		local langText
+		if v == "point_summary" or v == "point_nil" then
+			langText = SlashCo.Language(v)
+		elseif v == "point_total" then
+			langText = SlashCo.Language(v, LocalPlayer():GetTotalPoints())
+		else
+			local amount, num = LocalPlayer():GetPoints(v)
+			if amount > 0 then
+				amount = "+" .. amount
+			end
+
+			langText = SlashCo.Language("points_" .. v, amount)
+
+			if num > 1 then
+				langText = langText .. " x" .. num
+			end
+		end
+
+		local str = string.format("<font=TVCD_small>%s</font>", langText)
+		local parsedItem = markup.Parse(str)
+
+		parsedItem:Draw(ScrW() * 0.025 + 4, ScrH() * 0.95 - shift, TEXT_ALIGN_LEFT, TEXT_ALIGN_BOTTOM)
+
+		shift = shift + 14 + 8
+	end
+end
+
 local function printPlayersNeatly(players)
 	local count = #players
 	if count == 0 then
@@ -34,25 +82,20 @@ local function printRescued(rescued)
 	return SlashCo.Language(count == 1 and "RescuedOnlyOne" or "Rescued", neatString)
 end
 
-local function printLeftBehind(survivors, rescued)
-	local plysLeftBehind = table.Copy(survivors)
-	for k, ply in pairs(plysLeftBehind) do
-		if not IsValid(ply) then
-			table.remove(plysLeftBehind, k)
-			continue
-		end
-		if ply:Team() ~= TEAM_SURVIVOR then
-			table.remove(plysLeftBehind, k)
-			continue
-		end
-		for _, v in ipairs(rescued) do
-			if not IsValid(v) then
-				continue
-			end
-			if ply:UserID() == v:UserID() then
-				table.remove(plysLeftBehind, k)
+local function printLeftBehind(rescued)
+	local plysLeftBehind = {}
+	for _, v in ipairs(team.GetPlayers(TEAM_SURVIVOR)) do
+		local isRescued
+		for _, v1 in ipairs(rescued) do
+			if not IsValid(v1) then continue end
+			if v:UserID() == v1:UserID() then
+				isRescued = true
 				break
 			end
+		end
+
+		if not isRescued then
+			table.insert(plysLeftBehind, v)
 		end
 	end
 
@@ -63,16 +106,21 @@ local function printLeftBehind(survivors, rescued)
 	return SlashCo.Language(count == 1 and "LeftBehindOnlyOne" or "LeftBehind", neatString)
 end
 
-local function printKilled(survivors)
-	local plysKilled = table.Copy(survivors)
-	for k, ply in pairs(plysKilled) do
-		if not IsValid(ply) then
-			table.remove(plysKilled, k)
-			continue
+local function printKilled(survivors, rescued)
+	local plysKilled = {}
+	for k, ply in ipairs(survivors) do
+		if not IsValid(ply) then continue end
+		if ply:Team() == TEAM_SURVIVOR then continue end
+
+		for _, v in ipairs(rescued) do
+			if not IsValid(v) then continue end
+			if ply:UserID() == v:UserID() then
+				goto CONTINUE --needed to continue out of multiple loops
+			end
 		end
-		if ply:Team() == TEAM_SURVIVOR then
-			table.remove(plysKilled, k)
-		end
+
+		table.insert(plysKilled, ply)
+		:: CONTINUE ::
 	end
 
 	local neatString, count = printPlayersNeatly(plysKilled)
@@ -88,12 +136,12 @@ local function teamSummary(lines, survivors, rescued)
 		table.insert(lines, rescuedString)
 	end
 
-	local leftBehindString = printLeftBehind(survivors, rescued)
+	local leftBehindString = printLeftBehind(rescued)
 	if leftBehindString then
 		table.insert(lines, leftBehindString)
 	end
 
-	local killedString = printKilled(survivors)
+	local killedString = printKilled(survivors, rescued)
 	if killedString then
 		table.insert(lines, killedString)
 	end
@@ -192,7 +240,7 @@ local stringTable = {
 			SlashCo.Language("Difficulty", difficultyTable[info[5]]),
 		}
 		if info[6] ~= "Regular" then
-			table.insert(lines, SlashCo.Language("Offering_name", difficultyTable[info[6]]))
+			table.insert(lines, SlashCo.Language("Offering_name", info[6]))
 		end
 
 		return lines
@@ -244,14 +292,20 @@ hook.Add("scValue_RoundEnd", "SlashCoRoundEnd", function(state, survivors, rescu
 		return
 	end
 
+	local cur = CurTime()
+
 	local linesPlay = table.Reverse(lines)
-	local panel = vgui.Create("Panel") --GetHUDPanel():Add("Panel")
+	local panel = vgui.Create("Panel")
 	panel:Dock(FILL)
 	fadeIn(panel)
 
 	function panel.Paint()
 		surface.SetDrawColor(0, 0, 0)
 		panel:DrawFilledRect()
+
+		if stateTable[state] ~= "intro" and CurTime() - cur > 2 then
+			showPointSummary(cur)
+		end
 	end
 
 	timer.Simple(0, function()
@@ -287,16 +341,10 @@ hook.Add("scValue_RoundEnd", "SlashCoRoundEnd", function(state, survivors, rescu
 end)
 
 local helimusic_antispam
-net.Receive("mantislashcoHelicopterMusic", function(_, _)
-
-	--[[ but what if le slashers le heard le music.........
-	if LocalPlayer():Team() == TEAM_SLASHER then
-		return
-	end
-	--]]
-
+local heli_music
+net.Receive("mantislashcoHelicopterMusic", function()
 	if not helimusic_antispam then
-		local heli_music = CreateSound(LocalPlayer(), "slashco/music/slashco_helicopter.wav")
+		heli_music = CreateSound(LocalPlayer(), "slashco/music/slashco_helicopter.wav")
 		heli_music:Play()
 		helimusic_antispam = true
 		g_AmbientStop = true

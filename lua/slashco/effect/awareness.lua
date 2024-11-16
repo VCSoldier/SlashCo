@@ -46,7 +46,7 @@ EFFECT.Screenspace = function()
 end
 
 if CLIENT then
-	local mat = Material("models/shiny")
+	local mat = Material("lights/white")
 
 	local function showSurvivors()
 		cam.Start3D()
@@ -72,6 +72,7 @@ if CLIENT then
 		end
 
 		render.SetBlend(num)
+		render.MaterialOverride("")
 		cam.End3D()
 	end
 

@@ -11,13 +11,10 @@ ITEM.MaxAllowed = function()
 	return 2
 end
 ITEM.IsSpawnable = true
-ITEM.OnDrop = function(ply)
-end
 ITEM.OnDie = function(ply)
 	ply:EmitSound("slashco/survivor/deathward.mp3")
 	ply:EmitSound("slashco/survivor/deathward_break" .. math.random(1, 2) .. ".mp3")
 
-	--SlashCo.RespawnPlayer(ply)
 	SlashCo.ChangeSurvivorItem(ply, "DeathWardUsed")
 
 	return true
@@ -31,7 +28,7 @@ ITEM.OnPickUp = function(ply)
 	end
 
 	local userid = ply:UserID()
-	timer.Create("deathWardDamage_" .. userid, 45, 0, function()
+	timer.Create("deathWardDamage_" .. userid, 30, 0, function()
 		if not IsValid(ply) then
 			timer.Remove("deathWardDamage_" .. userid)
 			return
